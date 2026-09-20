@@ -125,3 +125,19 @@ export function IconExternal(props: IconProps) {
     </Icon>
   )
 }
+
+export function IconPause(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M6 3.5v9M10 3.5v9" />
+    </Icon>
+  )
+}
+
+export function IconPlay(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M5 3.6l7.2 4.4L5 12.4z" />
+    </Icon>
+  )
+}

@@ -516,6 +516,91 @@ async function checkClipboardPipeline(window: BrowserWindow, log: Logger): Promi
   }
 }
 
+/**
+ * Clicks the overlay's watch controls.
+ *
+ * Both of them: the header badge reports the state and the status bar names the action, and
+ * each has to relabel itself when the state flips — a button that keeps saying the same thing
+ * after being pressed is how this control was unreadable in the first place.
+ *
+ * `clipboardWatchEnabled` is flipped and put straight back, so the setting is left as the
+ * probe found it. The watcher is never started during a self-check (main.ts skips it while
+ * `--self-check` is set), which is what keeps this from reading the user's clipboard.
+ */
+async function checkWatchToggle(window: BrowserWindow): Promise<SelfCheckEntry> {
+  const name = 'watch toggle'
+
+  interface Control {
+    label: string
+    title: string | null
+  }
+
+  try {
+    const result = (await window.webContents.executeJavaScript(`(async () => {
+      const read = async () => (await window.translateClip.getBootstrapData()).config.clipboardWatchEnabled
+      const snapshot = () => [...document.querySelectorAll('[data-watch-toggle]')].map((toggle) => ({
+        label: (toggle.textContent || '').trim(),
+        title: toggle.getAttribute('title')
+      }))
+
+      const before = await read()
+      const beforeControls = snapshot()
+      if (beforeControls.length === 0) return { found: false }
+
+      // Re-queried rather than reused: a stale node would make the second click a no-op and
+      // the probe would report "not restored" for the wrong reason.
+      document.querySelector('[data-watch-toggle]').click()
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      const after = await read()
+      const afterControls = snapshot()
+
+      document.querySelector('[data-watch-toggle]').click()
+      await new Promise((resolve) => setTimeout(resolve, 400))
+
+      return { found: true, before, after, restored: await read(), beforeControls, afterControls }
+    })()`)) as {
+      found: boolean
+      before?: boolean
+      after?: boolean
+      restored?: boolean
+      beforeControls?: Control[]
+      afterControls?: Control[]
+    }
+
+    if (!result.found) {
+      return { name, ok: false, detail: 'the overlay has no [data-watch-toggle] control' }
+    }
+
+    if (result.after === result.before) {
+      return { name, ok: false, detail: `clicking the control left watching at ${String(result.before)}` }
+    }
+
+    if (result.restored !== result.before) {
+      return { name, ok: false, detail: 'clicking the control a second time did not restore watching' }
+    }
+
+    const before = result.beforeControls ?? []
+    const after = result.afterControls ?? []
+    const labels = `${before.map((c) => c.label).join(' / ')} -> ${after.map((c) => c.label).join(' / ')}`
+
+    if (before.length !== after.length) {
+      return { name, ok: false, detail: `the overlay controls changed in number (${labels})` }
+    }
+
+    if (!after.every((control, index) => control.label && control.label !== before[index]?.label)) {
+      return { name, ok: false, detail: `a control kept its label after being pressed (${labels})` }
+    }
+
+    if (!after.every((control, index) => control.title && control.title !== before[index]?.title)) {
+      return { name, ok: false, detail: `a control kept its tooltip after being pressed (${labels})` }
+    }
+
+    return { name, ok: true, detail: `the overlay controls relabelled and paused/resumed watching (${labels})` }
+  } catch (error) {
+    return { name, ok: false, detail: (error as Error).message }
+  }
+}
+
 async function fileExists(path: string): Promise<boolean> {
   try {
     await access(path)
@@ -628,6 +713,9 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
       if (target.view === 'overlay' && bridge === 'object' && root.children > 0) {
         const pipeline = await checkClipboardPipeline(window, options.log)
         push(pipeline.name, pipeline.ok, pipeline.detail)
+
+        const watchToggle = await checkWatchToggle(window)
+        push(watchToggle.name, watchToggle.ok, watchToggle.detail)
 
         const translation = await checkTranslationFlow(window, options.log)
         push(translation.name, translation.ok, translation.detail)

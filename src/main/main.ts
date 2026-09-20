@@ -300,7 +300,14 @@ class TranslateClipApp {
       // Restarting re-seeds whatever is currently on the clipboard, so resuming
       // never fires a translation for something copied while watching was paused.
       this.clipboardWatcher.stop()
-      this.clipboardWatcher.start()
+
+      // A diagnostic run never reads the clipboard (see initialize()), so it must not
+      // start watching here either — the watch-toggle self-check probe flips this very
+      // setting, and would otherwise hand the user's clipboard to the pipeline.
+      if (next.clipboardWatchEnabled && !SELF_CHECK) {
+        this.clipboardWatcher.start()
+      }
+
       this.logger.info(`clipboard watching ${next.clipboardWatchEnabled ? 'resumed' : 'paused'}`)
     }
 

@@ -8,6 +8,7 @@ import { Button } from '../ui/Button'
 import { IconChevronDown, IconClose, IconCopy, IconGear, IconMinus, IconRefresh } from '../ui/Icon'
 import { HistoryPanel } from './HistoryPanel'
 import { StatusBar } from './StatusBar'
+import { WatchToggle } from './WatchToggle'
 
 type OverlayTab = 'current' | 'history'
 
@@ -151,6 +152,9 @@ function CollapsedBar() {
       >
         <span className="shrink-0 text-[12px] font-semibold tracking-wide text-text">{t('overlay.title')}</span>
         <span className="min-w-0 flex-1 truncate selectable text-[12px] text-muted">{preview}</span>
+        <span style={noDragRegion}>
+          <WatchToggle variant="icon" />
+        </span>
         <Button
           variant="ghost"
           size="icon"
@@ -172,7 +176,7 @@ export function OverlayShell() {
   const [tab, setTab] = useState<OverlayTab>('current')
 
   const { config, capabilities } = state.bootstrap
-  const { translationState, clipboardStatus } = state
+  const { translationState } = state
   const opaque = config.overlay.opaque
   const frameStyle = overlayFrameStyle(config.overlay.fontSize)
 
@@ -202,9 +206,7 @@ export function OverlayShell() {
       >
         <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2" style={dragRegion}>
           <span className="text-[12.5px] font-semibold tracking-wide text-text">{t('overlay.title')}</span>
-          <Badge tone={clipboardStatus.watching ? 'ok' : 'neutral'}>
-            {clipboardStatus.watching ? t('overlay.listening') : t('overlay.paused')}
-          </Badge>
+          <WatchToggle />
           <span className="flex-1" />
           <div className="flex items-center gap-0.5" style={noDragRegion}>
             <Button

@@ -4,6 +4,7 @@ import type { TranslationState } from '@shared/types'
 
 import { useAppState } from '../../store/appStore'
 import { cn } from '../../utils/cn'
+import { WatchToggle } from './WatchToggle'
 
 const PHASE_TONE: Record<TranslationState['phase'], string> = {
   idle: 'bg-faint',
@@ -19,8 +20,7 @@ export function StatusBar() {
   const { t } = useTranslation()
   const state = useAppState()
 
-  const { translationState, clipboardActivity, clipboardStatus, bootstrap } = state
-  const config = bootstrap.config
+  const { translationState, clipboardActivity } = state
   const activeProfile = state.llmProviderState.profiles.find((profile) => profile.profileId === state.llmProviderState.activeProfileId)
 
   const phaseLabel = t(`overlay.phase.${translationState.phase}`, { defaultValue: translationState.phase })
@@ -54,13 +54,7 @@ export function StatusBar() {
 
       <span className="text-faint">·</span>
 
-      <button
-        type="button"
-        className="rounded px-1 transition-colors hover:bg-surface-hover hover:text-text"
-        onClick={() => void window.translateClip.setClipboardWatch(!config.clipboardWatchEnabled)}
-      >
-        {clipboardStatus.watching ? t('overlay.listening') : t('overlay.paused')}
-      </button>
+      <WatchToggle variant="text" />
     </footer>
   )
 }
