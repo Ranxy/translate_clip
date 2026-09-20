@@ -8,19 +8,30 @@ import type { WindowKind, WindowStateStore } from './windowStateStore'
 
 export type RendererView = WindowKind
 
-/** Height the overlay shrinks to in collapsed mode (header + one status line). */
+/** Height the overlay shrinks to in collapsed mode (the collapsed bar's starting height). */
 const COLLAPSED_OVERLAY_HEIGHT = 76
 
 /**
  * Bounds the expanded overlay is kept within.
  *
  * The minimum height exists so the expanded card stays usable, and it is *not* applied while
- * collapsed: the collapsed bar is shorter than this, and a window minimum silently overrides
- * `setBounds`, which is what left the collapsed overlay a ~200 DIP card with one line floating
- * in the middle of it instead of a bar.
+ * collapsed: the collapsed bar sizes itself to its content, and a window minimum silently
+ * overrides `setBounds`, which is what left the collapsed overlay a ~200 DIP card with one line
+ * floating in the middle of it instead of a bar.
  */
 const MIN_OVERLAY_WIDTH = 300
 const MIN_OVERLAY_HEIGHT = 200
+const MAX_OVERLAY_HEIGHT = 900
+
+/**
+ * Bounds for the collapsed bar while the renderer sizes it to its content.
+ *
+ * The floor sits below one line so the content, not the window, decides; the ceiling is above
+ * the number of lines the renderer clamps the preview to, so the text limit is what normally
+ * applies and this only catches a runaway.
+ */
+const MIN_COLLAPSED_OVERLAY_HEIGHT = 44
+const MAX_COLLAPSED_OVERLAY_HEIGHT = 320
 
 /**
  * How long a resize event is attributed to us rather than to the user.
@@ -119,7 +130,7 @@ export class WindowManager {
       ...bounds,
       minWidth: MIN_OVERLAY_WIDTH,
       minHeight: MIN_OVERLAY_HEIGHT,
-      maxHeight: 900,
+      maxHeight: MAX_OVERLAY_HEIGHT,
       show: false,
       frame: false,
       transparent: true,
@@ -240,7 +251,7 @@ export class WindowManager {
 
       // The window minimum has to move with the state, or the OS silently refuses the
       // shorter height and the "collapsed" overlay stays a tall empty card.
-      window.setMinimumSize(MIN_OVERLAY_WIDTH, COLLAPSED_OVERLAY_HEIGHT)
+      window.setMinimumSize(MIN_OVERLAY_WIDTH, MIN_COLLAPSED_OVERLAY_HEIGHT)
       this.resizeOverlay(window, { height: COLLAPSED_OVERLAY_HEIGHT })
       return
     }
@@ -277,8 +288,14 @@ export class WindowManager {
       return
     }
 
+    // The collapsed bar is sized to its content by the renderer, so it is allowed below the
+    // expanded card's minimum — that minimum is exactly what used to pin the bar open.
+    const collapsed = this.options.getConfig().overlay.collapsed
+    const min = collapsed ? MIN_COLLAPSED_OVERLAY_HEIGHT : MIN_OVERLAY_HEIGHT
+    const max = collapsed ? MAX_COLLAPSED_OVERLAY_HEIGHT : MAX_OVERLAY_HEIGHT
     const currentHeight = this.overlaySize?.height ?? window.getBounds().height
-    this.resizeOverlay(window, { height: Math.min(Math.max(currentHeight + deltaY, 120), 900) })
+
+    this.resizeOverlay(window, { height: Math.min(Math.max(currentHeight + deltaY, min), max) })
   }
 
   /**

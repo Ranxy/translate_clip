@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useAppState, useAppStore } from '../../store/appStore'
@@ -136,38 +136,102 @@ function overlayFrameStyle(fontSize: number): CSSProperties {
   }
 }
 
+/** Padding around the bar, i.e. the frame div's `p-2`. Needed to size the window to it. */
+const COLLAPSED_FRAME_PADDING = 8
+
 function CollapsedBar() {
   const { t } = useTranslation()
   const store = useAppStore()
   const { translationState, bootstrap } = useAppState()
-  const frameStyle = overlayFrameStyle(bootstrap.config.overlay.fontSize)
+  const config = bootstrap.config.overlay
+  const frameStyle = overlayFrameStyle(config.fontSize)
+  const zoom = overlayZoom(config.fontSize)
+  const barRef = useRef<HTMLDivElement | null>(null)
+
+  /** The last correction asked for, so the same one is not asked for twice. */
+  const lastFit = useRef<{ actual: number; wanted: number } | null>(null)
 
   const preview = translationState.translatedText ?? translationState.sourceText ?? t('overlay.emptyTitle')
+
+  /**
+   * Resizes the window to the bar.
+   *
+   * The bar is one line for a short translation and taller for a long one, and the window has
+   * to follow it — otherwise the text is clipped to whatever height the window happened to be
+   * collapsed to. Rects are measured inside the zoomed frame, so the frame's padding is scaled
+   * by the same factor.
+   *
+   * A resize reaches this process on a later tick than the request, so the correction is keyed
+   * on (viewport, target) and re-checked a few times: asking twice for the same correction
+   * stacked it (a StrictMode double invocation in development left a 137 DIP bar in a 197 DIP
+   * window), while giving up after the first ask left the bar clipped whenever the viewport had
+   * not settled yet.
+   */
+  useEffect(() => {
+    let attempts = 0
+    let timer: number | undefined
+
+    const fit = () => {
+      const bar = barRef.current
+      if (!bar) {
+        return
+      }
+
+      const wanted = Math.round(bar.getBoundingClientRect().height + COLLAPSED_FRAME_PADDING * 2 * zoom)
+      const actual = window.innerHeight
+
+      if (Math.abs(wanted - actual) < 2) {
+        lastFit.current = null
+        return
+      }
+
+      const pending = lastFit.current
+      if (!pending || pending.actual !== actual || pending.wanted !== wanted) {
+        lastFit.current = { actual, wanted }
+        void window.translateClip.resizeOverlayBy(wanted - actual)
+      }
+
+      if (attempts < 5) {
+        attempts += 1
+        timer = window.setTimeout(fit, 120)
+      }
+    }
+
+    fit()
+
+    return () => {
+      if (timer) {
+        window.clearTimeout(timer)
+      }
+    }
+  }, [preview, zoom, translationState.phase])
 
   return (
     <div className="p-2" style={frameStyle}>
       <div
-        className="flex h-full items-center gap-2 rounded-xl border border-border bg-surface px-3 backdrop-blur-2xl"
+        ref={barRef}
+        data-collapsed-bar
+        className="flex items-start gap-2 rounded-xl border border-border bg-surface px-3 py-2.5 backdrop-blur-2xl"
         style={dragRegion}
       >
-        <span className="shrink-0 text-[12px] font-semibold tracking-wide text-text">{t('overlay.title')}</span>
-        {/* One line only, so the rest of the text is worth having on hover rather than
-            forcing an expand just to read what was copied. */}
-        <span className="min-w-0 flex-1 truncate selectable text-[12px] text-muted" title={preview}>
+        {/* `line-clamp-6` is the ceiling for a content-sized bar: past a handful of lines the
+            expanded view is the better tool, and without one a long copy would turn the least
+            intrusive form of the overlay into a wall of text. The literal class name is what
+            Tailwind scans for, so it is not built from a constant. */}
+        <span className="line-clamp-6 min-w-0 flex-1 selectable text-[12px] leading-5 text-muted" title={preview}>
           {preview}
         </span>
-        <span style={noDragRegion}>
+        <span className="flex shrink-0 items-center gap-0.5" style={noDragRegion}>
           <WatchToggle variant="icon" />
+          <Button
+            variant="ghost"
+            size="icon"
+            title={t('overlay.expand')}
+            onClick={() => void store.updateConfig({ overlay: { ...store.config.overlay, collapsed: false } })}
+          >
+            <IconChevronDown />
+          </Button>
         </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          style={noDragRegion}
-          title={t('overlay.expand')}
-          onClick={() => void store.updateConfig({ overlay: { ...store.config.overlay, collapsed: false } })}
-        >
-          <IconChevronDown />
-        </Button>
       </div>
     </div>
   )
