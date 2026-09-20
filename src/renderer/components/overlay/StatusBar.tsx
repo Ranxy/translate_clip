@@ -25,13 +25,19 @@ export function StatusBar() {
 
   const phaseLabel = t(`overlay.phase.${translationState.phase}`, { defaultValue: translationState.phase })
 
-  const activityLabel = !clipboardActivity
-    ? t('activity.idle')
-    : clipboardActivity.accepted
-      ? t('activity.accepted', { count: clipboardActivity.charCount })
-      : t('activity.skipped', {
+  /**
+   * Why the last copy was *not* translated, or nothing.
+   *
+   * A successful capture used to report its character count here, which said nothing the phase
+   * and the translation above do not already say. The skip reasons do carry information — a
+   * silently skipped copy is otherwise indistinguishable from a broken one — so those stay.
+   */
+  const skipLabel =
+    clipboardActivity && !clipboardActivity.accepted
+      ? t('activity.skipped', {
           reason: clipboardActivity.reason ? t(`activity.reasons.${clipboardActivity.reason}`) : ''
         })
+      : null
 
   return (
     <footer className="flex items-center gap-2 border-t border-border px-3 py-1.5 text-[11px] text-muted">
@@ -48,11 +54,15 @@ export function StatusBar() {
 
       <span className="flex-1" />
 
-      <span className="truncate" title={clipboardActivity?.preview ?? undefined}>
-        {activityLabel}
-      </span>
+      {skipLabel ? (
+        <>
+          <span className="truncate" title={clipboardActivity?.preview ?? undefined}>
+            {skipLabel}
+          </span>
 
-      <span className="text-faint">·</span>
+          <span className="text-faint">·</span>
+        </>
+      ) : null}
 
       <WatchToggle variant="text" />
     </footer>

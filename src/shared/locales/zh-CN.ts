@@ -38,6 +38,7 @@ export const zhCN = {
     actionTranslateNow: '立即翻译剪贴板',
     actionRetranslate: '重译',
     actionCopy: '复制译文',
+    actionClear: '清空',
     actionSwapDirection: '对调方向',
     actionPin: '收藏',
     collapse: '折叠',

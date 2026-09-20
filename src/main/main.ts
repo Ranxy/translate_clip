@@ -594,6 +594,19 @@ class TranslateClipApp {
     this.clipboardWatcher.readNow('manual')
   }
 
+  /**
+   * Empties the overlay's current view.
+   *
+   * An in-flight request is aborted first: otherwise the answer arrives a moment later and
+   * refills the panel the user just cleared. The history entry is left alone — this clears what
+   * is on screen, and the history panel has its own way to remove entries.
+   */
+  clearTranslation(): void {
+    this.translationQueue.cancel()
+    this.logger.info('current translation cleared')
+    this.setTranslationState(createIdleTranslationState())
+  }
+
   /* ── Snapshots ───────────────────────────────────────────────────── */
 
   private buildProviderState(): LlmProviderState {
@@ -664,6 +677,7 @@ class TranslateClipApp {
       'app:translateClipboardNow': () => this.translateClipboardNow(),
       'app:retranslateLast': () => this.translationQueue.retranslate(),
       'app:cancelTranslation': () => this.translationQueue.cancel(),
+      'app:clearTranslation': () => this.clearTranslation(),
 
       'clipboard:writeText': (text: string) => {
         // Goes through the watcher so the app's own write is suppressed instead of

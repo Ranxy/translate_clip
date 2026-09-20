@@ -354,6 +354,7 @@ export interface TranslateClipApi {
   translateClipboardNow: () => Promise<void>
   retranslateLast: () => Promise<void>
   cancelTranslation: () => Promise<void>
+  clearTranslation: () => Promise<void>
 
   listHistory: (query: HistoryQuery) => Promise<HistoryPage>
   toggleHistoryPin: (id: string) => Promise<void>

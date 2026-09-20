@@ -141,3 +141,14 @@ export function IconPlay(props: IconProps) {
     </Icon>
   )
 }
+
+export function IconTrash(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3 4.5h10" />
+      <path d="M6.5 4.5V3.2a.7.7 0 0 1 .7-.7h1.6a.7.7 0 0 1 .7.7v1.3" />
+      <path d="M4.5 4.5l.6 8a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-8" />
+      <path d="M6.8 7v4M9.2 7v4" />
+    </Icon>
+  )
+}

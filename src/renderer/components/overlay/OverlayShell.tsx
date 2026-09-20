@@ -5,7 +5,7 @@ import { useAppState, useAppStore } from '../../store/appStore'
 import { cn, dragRegion, noDragRegion } from '../../utils/cn'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
-import { IconChevronDown, IconClose, IconCopy, IconGear, IconMinus, IconRefresh } from '../ui/Icon'
+import { IconChevronDown, IconClose, IconCopy, IconGear, IconMinus, IconRefresh, IconTrash } from '../ui/Icon'
 import { HistoryPanel } from './HistoryPanel'
 import { StatusBar } from './StatusBar'
 import { WatchToggle } from './WatchToggle'
@@ -139,6 +139,15 @@ function overlayFrameStyle(fontSize: number): CSSProperties {
 /** Padding around the bar, i.e. the frame div's `p-2`. Needed to size the window to it. */
 const COLLAPSED_FRAME_PADDING = 8
 
+/**
+ * Width of the control group laid out in a row: three 28 DIP icon buttons and two 2 DIP gaps.
+ *
+ * The stacked layout frees this much width for the text, which is the reason to stack at all —
+ * and the reason the wrap decision has to be made against the *row* width (see below) rather
+ * than whatever the current layout happens to give the text.
+ */
+const COLLAPSED_CONTROLS_ROW_WIDTH = 88
+
 function CollapsedBar() {
   const { t } = useTranslation()
   const store = useAppStore()
@@ -147,11 +156,17 @@ function CollapsedBar() {
   const frameStyle = overlayFrameStyle(config.fontSize)
   const zoom = overlayZoom(config.fontSize)
   const barRef = useRef<HTMLDivElement | null>(null)
+  const textRef = useRef<HTMLSpanElement | null>(null)
+  const measureRef = useRef<HTMLSpanElement | null>(null)
 
   /** The last correction asked for, so the same one is not asked for twice. */
   const lastFit = useRef<{ actual: number; wanted: number } | null>(null)
 
+  /** True once the preview needs more than the one line the bar starts as. */
+  const [wrapped, setWrapped] = useState(false)
+
   const preview = translationState.translatedText ?? translationState.sourceText ?? t('overlay.emptyTitle')
+  const hasContent = Boolean(translationState.sourceText || translationState.translatedText)
 
   /**
    * Resizes the window to the bar.
@@ -173,8 +188,28 @@ function CollapsedBar() {
 
     const fit = () => {
       const bar = barRef.current
+      const text = textRef.current
+      const measure = measureRef.current
       if (!bar) {
         return
+      }
+
+      /**
+       * Whether the controls have to stack.
+       *
+       * Measured against the width the text would have with the controls in a *row*, never the
+       * width it currently has: stacking frees ~60 DIP, so a preview that wraps in the row
+       * layout can fit on one line in the stacked one, and deciding from the current layout
+       * would flip between the two forever (each flip changes the width, the height and the
+       * window). `measure` is an invisible single-line copy of the preview for exactly this.
+       */
+      if (text && measure) {
+        const group = bar.lastElementChild
+        const stacking = group ? Math.max(COLLAPSED_CONTROLS_ROW_WIDTH * zoom - group.getBoundingClientRect().width, 0) : 0
+        const rowWidth = text.getBoundingClientRect().width - stacking
+        const nextWrapped = measure.getBoundingClientRect().width > rowWidth + 1
+
+        setWrapped((current) => (current === nextWrapped ? current : nextWrapped))
       }
 
       const wanted = Math.round(bar.getBoundingClientRect().height + COLLAPSED_FRAME_PADDING * 2 * zoom)
@@ -204,25 +239,53 @@ function CollapsedBar() {
         window.clearTimeout(timer)
       }
     }
-  }, [preview, zoom, translationState.phase])
+  }, [preview, zoom, translationState.phase, wrapped])
 
   return (
     <div className="p-2" style={frameStyle}>
       <div
         ref={barRef}
         data-collapsed-bar
-        className="flex items-start gap-2 rounded-xl border border-border bg-surface px-3 py-2.5 backdrop-blur-2xl"
+        className="relative flex items-start gap-2 rounded-xl border border-border bg-surface px-3 py-2.5 backdrop-blur-2xl"
         style={dragRegion}
       >
+        {/* Invisible single-line copy of the preview, used to decide whether the controls have to
+            stack. It has to be measured outside the wrapping flow, or the answer would depend on
+            the layout it is meant to choose. */}
+        <span
+          ref={measureRef}
+          aria-hidden="true"
+          className="pointer-events-none invisible absolute left-3 top-2.5 whitespace-nowrap text-[12px] leading-5"
+        >
+          {preview}
+        </span>
         {/* `line-clamp-6` is the ceiling for a content-sized bar: past a handful of lines the
             expanded view is the better tool, and without one a long copy would turn the least
             intrusive form of the overlay into a wall of text. The literal class name is what
             Tailwind scans for, so it is not built from a constant. */}
-        <span className="line-clamp-6 min-w-0 flex-1 selectable text-[12px] leading-5 text-muted" title={preview}>
+        <span
+          ref={textRef}
+          className="line-clamp-6 min-w-0 flex-1 selectable text-[12px] leading-5 text-muted"
+          title={preview}
+        >
           {preview}
         </span>
-        <span className="flex shrink-0 items-center gap-0.5" style={noDragRegion}>
+        <span
+          className={cn('flex shrink-0 gap-0.5', wrapped ? 'flex-col items-center' : 'items-center')}
+          style={noDragRegion}
+        >
           <WatchToggle variant="icon" />
+          <Button
+            variant="ghost"
+            size="icon"
+            data-clear-current
+            title={t('overlay.actionClear')}
+            aria-label={t('overlay.actionClear')}
+            disabled={!hasContent}
+            onClick={() => void window.translateClip.clearTranslation()}
+          >
+            <IconTrash />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -261,6 +324,7 @@ export function OverlayShell() {
   }
 
   const canCopy = Boolean(translationState.translatedText)
+  const canClear = Boolean(translationState.sourceText || translationState.translatedText)
 
   return (
     <div className="p-2" style={frameStyle}>
@@ -313,6 +377,17 @@ export function OverlayShell() {
           >
             <IconCopy />
             {t('overlay.actionCopy')}
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            data-clear-current
+            disabled={!canClear}
+            title={t('overlay.actionClear')}
+            aria-label={t('overlay.actionClear')}
+            onClick={() => void window.translateClip.clearTranslation()}
+          >
+            <IconTrash />
           </Button>
           <span className="flex-1" />
           <div className="flex items-center rounded-lg bg-surface-sunken p-0.5">

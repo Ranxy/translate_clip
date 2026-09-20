@@ -35,6 +35,7 @@ export const en: LocaleResource = {
     actionTranslateNow: 'Translate clipboard now',
     actionRetranslate: 'Translate again',
     actionCopy: 'Copy translation',
+    actionClear: 'Clear',
     actionSwapDirection: 'Swap direction',
     actionPin: 'Pin',
     collapse: 'Collapse',

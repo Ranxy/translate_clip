@@ -601,6 +601,74 @@ async function checkWatchToggle(window: BrowserWindow): Promise<SelfCheckEntry> 
   }
 }
 
+/**
+ * Clicks the overlay's clear control.
+ *
+ * Runs after the translation probe, which leaves both a source and a translation on screen — so
+ * there is something to clear, and clearing has to remove both rather than just the translation.
+ * The control is then expected to disable itself, since there is nothing left to clear.
+ */
+async function checkClearCurrent(window: BrowserWindow): Promise<SelfCheckEntry> {
+  const name = 'clear current'
+
+  try {
+    const result = (await window.webContents.executeJavaScript(`(async () => {
+      const read = async () => (await window.translateClip.getBootstrapData()).translationState
+      const button = document.querySelector('[data-clear-current]')
+
+      if (!button) return { found: false }
+
+      const before = await read()
+      const wasDisabled = button.disabled
+      button.click()
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      const after = await read()
+
+      return {
+        found: true,
+        wasDisabled,
+        before: { source: before.sourceText, translated: before.translatedText },
+        after: { source: after.sourceText, translated: after.translatedText, phase: after.phase },
+        disabledAfter: document.querySelector('[data-clear-current]')?.disabled ?? null
+      }
+    })()`)) as {
+      found: boolean
+      wasDisabled?: boolean
+      before?: { source: string | null; translated: string | null }
+      after?: { source: string | null; translated: string | null; phase: string }
+      disabledAfter?: boolean | null
+    }
+
+    if (!result.found) {
+      return { name, ok: false, detail: 'the overlay has no [data-clear-current] control' }
+    }
+
+    if (!result.before?.source && !result.before?.translated) {
+      return { name, ok: false, detail: 'there was nothing on screen for the control to clear' }
+    }
+
+    if (result.wasDisabled) {
+      return { name, ok: false, detail: 'the control was disabled while a translation was on screen' }
+    }
+
+    if (result.after?.source || result.after?.translated || result.after?.phase !== 'idle') {
+      return {
+        name,
+        ok: false,
+        detail: `clearing left phase=${String(result.after?.phase)} with source=${result.after?.source ? 'set' : 'null'} translation=${result.after?.translated ? 'set' : 'null'}`
+      }
+    }
+
+    if (result.disabledAfter !== true) {
+      return { name, ok: false, detail: 'the control stayed enabled with nothing left to clear' }
+    }
+
+    return { name, ok: true, detail: 'clearing emptied the source and the translation and disabled the control' }
+  } catch (error) {
+    return { name, ok: false, detail: (error as Error).message }
+  }
+}
+
 async function fileExists(path: string): Promise<boolean> {
   try {
     await access(path)
@@ -740,6 +808,9 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
 
         const translation = await checkTranslationFlow(window, options.log)
         push(translation.name, translation.ok, translation.detail)
+
+        const clear = await checkClearCurrent(window)
+        push(clear.name, clear.ok, clear.detail)
 
         const scaling = await checkOverlayScaling(window, options.log)
         push(scaling.name, scaling.ok, scaling.detail)

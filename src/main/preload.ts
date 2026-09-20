@@ -49,6 +49,7 @@ const api: TranslateClipApi = {
   translateClipboardNow: () => ipcRenderer.invoke('app:translateClipboardNow'),
   retranslateLast: () => ipcRenderer.invoke('app:retranslateLast'),
   cancelTranslation: () => ipcRenderer.invoke('app:cancelTranslation'),
+  clearTranslation: () => ipcRenderer.invoke('app:clearTranslation'),
 
   listHistory: (query: HistoryQuery): Promise<HistoryPage> => ipcRenderer.invoke('history:list', query),
   toggleHistoryPin: (id: string) => ipcRenderer.invoke('history:togglePin', id),
