@@ -711,6 +711,27 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
       )
 
       if (target.view === 'overlay' && bridge === 'object' && root.children > 0) {
+        // These probes read the expanded card. A collapsed overlay — which is a persisted user
+        // layout, not a broken build — has no header, footer or card to measure and no labelled
+        // control to click, so without this the run reports failures that say nothing about the
+        // code. The collapsed layout is measured by hand instead; see the Windows checklist.
+        const overlayConfig = (await window.webContents.executeJavaScript(
+          '(async () => (await window.translateClip.getBootstrapData()).config.overlay)()'
+        )) as Record<string, unknown> | undefined
+
+        const setCollapsed = async (collapsed: boolean) => {
+          if (!overlayConfig) {
+            return
+          }
+
+          await window.webContents.executeJavaScript(
+            `window.translateClip.updateConfig({ overlay: ${JSON.stringify({ ...overlayConfig, collapsed })} })`
+          )
+          await new Promise((resolve) => setTimeout(resolve, 300))
+        }
+
+        await setCollapsed(false)
+
         const pipeline = await checkClipboardPipeline(window, options.log)
         push(pipeline.name, pipeline.ok, pipeline.detail)
 
@@ -728,6 +749,11 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
 
         const churn = await checkConfigChurn(window)
         push(churn.name, churn.ok, churn.detail)
+
+        // Puts the user's layout back exactly as it was found.
+        if (overlayConfig?.collapsed) {
+          await setCollapsed(true)
+        }
       }
 
       if (target.view === 'settings' && bridge === 'object' && root.children > 0) {
