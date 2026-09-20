@@ -12,6 +12,17 @@ export type RendererView = WindowKind
 const COLLAPSED_OVERLAY_HEIGHT = 76
 
 /**
+ * Bounds the expanded overlay is kept within.
+ *
+ * The minimum height exists so the expanded card stays usable, and it is *not* applied while
+ * collapsed: the collapsed bar is shorter than this, and a window minimum silently overrides
+ * `setBounds`, which is what left the collapsed overlay a ~200 DIP card with one line floating
+ * in the middle of it instead of a bar.
+ */
+const MIN_OVERLAY_WIDTH = 300
+const MIN_OVERLAY_HEIGHT = 200
+
+/**
  * How long a resize event is attributed to us rather than to the user.
  *
  * The OS reports a programmatic `setBounds` back within a frame or two; a drag
@@ -106,8 +117,8 @@ export class WindowManager {
 
     const window = new BrowserWindow({
       ...bounds,
-      minWidth: 300,
-      minHeight: 200,
+      minWidth: MIN_OVERLAY_WIDTH,
+      minHeight: MIN_OVERLAY_HEIGHT,
       maxHeight: 900,
       show: false,
       frame: false,
@@ -226,12 +237,17 @@ export class WindowManager {
 
     if (collapsed) {
       this.expandedOverlaySize = this.overlaySize ? { ...this.overlaySize } : null
+
+      // The window minimum has to move with the state, or the OS silently refuses the
+      // shorter height and the "collapsed" overlay stays a tall empty card.
+      window.setMinimumSize(MIN_OVERLAY_WIDTH, COLLAPSED_OVERLAY_HEIGHT)
       this.resizeOverlay(window, { height: COLLAPSED_OVERLAY_HEIGHT })
       return
     }
 
     const restoredHeight = this.expandedOverlaySize?.height ?? this.options.getConfig().overlay.height
     this.expandedOverlaySize = null
+    window.setMinimumSize(MIN_OVERLAY_WIDTH, MIN_OVERLAY_HEIGHT)
     this.resizeOverlay(window, { height: Math.max(restoredHeight, COLLAPSED_OVERLAY_HEIGHT) })
   }
 
@@ -479,8 +495,8 @@ export class WindowManager {
   private resolveOverlayBounds(config: AppConfig): { x?: number; y?: number; width: number; height: number } {
     const saved = this.options.windowStateStore.getWindowState('overlay')
     const fallbackSize = {
-      width: Math.max(config.overlay.width, 300),
-      height: Math.max(config.overlay.height, 200)
+      width: Math.max(config.overlay.width, MIN_OVERLAY_WIDTH),
+      height: Math.max(config.overlay.height, MIN_OVERLAY_HEIGHT)
     }
 
     if (!saved) {
@@ -488,8 +504,8 @@ export class WindowManager {
     }
 
     const size = {
-      width: Math.max(saved.width, 300),
-      height: Math.max(saved.height, 200)
+      width: Math.max(saved.width, MIN_OVERLAY_WIDTH),
+      height: Math.max(saved.height, MIN_OVERLAY_HEIGHT)
     }
 
     if (typeof saved.x !== 'number' || typeof saved.y !== 'number') {
@@ -588,8 +604,8 @@ export class WindowManager {
     }
 
     this.overlaySize = {
-      width: Math.max(this.overlaySize.width + deltaWidth, 300),
-      height: Math.max(this.overlaySize.height + deltaHeight, 200)
+      width: Math.max(this.overlaySize.width + deltaWidth, MIN_OVERLAY_WIDTH),
+      height: Math.max(this.overlaySize.height + deltaHeight, MIN_OVERLAY_HEIGHT)
     }
   }
 

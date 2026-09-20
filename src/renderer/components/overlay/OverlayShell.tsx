@@ -151,7 +151,11 @@ function CollapsedBar() {
         style={dragRegion}
       >
         <span className="shrink-0 text-[12px] font-semibold tracking-wide text-text">{t('overlay.title')}</span>
-        <span className="min-w-0 flex-1 truncate selectable text-[12px] text-muted">{preview}</span>
+        {/* One line only, so the rest of the text is worth having on hover rather than
+            forcing an expand just to read what was copied. */}
+        <span className="min-w-0 flex-1 truncate selectable text-[12px] text-muted" title={preview}>
+          {preview}
+        </span>
         <span style={noDragRegion}>
           <WatchToggle variant="icon" />
         </span>
