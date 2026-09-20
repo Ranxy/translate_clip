@@ -79,6 +79,16 @@ export function GeneralPage() {
 
         <Divider />
 
+        <Field label={t('settings.general.notifications')} hint={t('settings.general.notificationsHint')}>
+          <Switch
+            label={t('settings.general.notifications')}
+            checked={config.notificationsEnabled}
+            onChange={(checked) => void store.updateConfig({ notificationsEnabled: checked })}
+          />
+        </Field>
+
+        <Divider />
+
         <Field label={t('settings.general.historyLimit')} hint={t('settings.general.historyLimitHint')}>
           <NumberInput
             value={config.historyLimit}

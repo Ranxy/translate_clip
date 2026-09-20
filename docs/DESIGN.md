@@ -6,6 +6,35 @@
 
 ---
 
+## ⚠️ 实现现状(先读这一节)
+
+**本文档写在实现之前,部分内容已经与代码不一致。** 权威来源是代码与
+[`README.md`](../README.md);本文件保留的是设计推理与取舍,用来回答"为什么这样做"。
+
+**已实现(Windows + Linux)**:配置层、浮层 / 设置窗口 / 首启向导(4 步)、托盘、全局快捷键、
+开机自启、剪贴板管线(轮询 + 过滤链 + 语言脚本检测 + 方向决策)、provider profile(sql.js)
+与 safeStorage 凭据、OpenAI 兼容客户端(重试 / 超时 / 取消 / 三层响应解析)、latest-wins 队列、
+历史与复用缓存、术语表注入、提示词与参数编辑、历史面板、术语表编辑器、快捷键录制、
+失败通知、NSIS / AppImage / deb 打包与 CI。
+
+**与本文档的偏离(以代码为准)**:
+
+| 主题 | 文档写的 | 实际实现 |
+| --- | --- | --- |
+| 存储分层 | `llmConfigStore` 与 `historyRepository` 各自开库 | `services/database.ts` 单点持有 sql.js 与文件,schema 含两张表;两个仓储都接这个服务 |
+| 历史分页 | 单列时间戳游标 | 键集游标 `createdAt\|id`,谓词与 `(created_at DESC, id DESC)` 排序严格一致 |
+| 分期 | 术语表 / 快捷键 / 提示词页排在 P2 | 一期就做了,设置窗口已无占位页 |
+| 自检体系 | 未提及 | `services/selfCheck.ts` + `--self-check`:资源、图标解码、视图、剪贴板管线、真实翻译、全部设置页、向导 |
+| 失败通知 | 只在配置里列了 `notificationsEnabled` | `failureNotification.ts`(纯决策 + 静默窗口)+ `desktopNotifier.ts`(Electron 薄封装) |
+| 平台能力 | 未提及 | `capabilityRegistry` 上报 `tray` / `globalShortcut` / `keyring` / `launchAtLogin`(开发模式下自启不可用会置灰) |
+| 打包细节 | 一份 `extraResources: resources → resources` | 逐目录映射,否则打包后在 `<resources>/resources/...` 而代码找 `<resources>/icons/...`(托盘图标会空白) |
+| 图标 | 计划产出 PNG + 手写 ICO | **只有 PNG**:ICO 在 Linux 上无法用 `nativeImage` 校验,而 `win.icon` 指向的 PNG 会由 electron-builder 转换为 ICO |
+
+**未实现**:`streamEnabled`(配置项保留但未接)、macOS 适配、Wayland 原生剪贴板、
+OCR / 划词取词。Windows 侧的人工验证清单见 [`WINDOWS-VERIFICATION.md`](WINDOWS-VERIFICATION.md)。
+
+---
+
 ## 0. 命名与已确认决策
 
 | 项 | 取值 | 状态 |

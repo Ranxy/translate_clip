@@ -35,6 +35,7 @@ import { compileIgnorePatterns, filterClipboardText, type FilterContext } from '
 import { ConfigStore } from './services/configStore'
 import { createCredentialStore, type CredentialStore } from './services/credentialStore'
 import { createDatabaseService, type DatabaseService } from './services/database'
+import { notifyTranslationFailure } from './services/desktopNotifier'
 import { HistoryRepository } from './services/historyRepository'
 import { detectLanguage, resolveDirection } from './services/languageDetector'
 import { checkProviderConnection, toLlmError } from './services/llmClient'
@@ -109,6 +110,7 @@ class TranslateClipApp {
   private clipboardSkippedCount = 0
   private ignorePatterns: RegExp[] = []
   private lastAcceptedHash: string | null = null
+  private failureNotifiedAt = new Map<string, number>()
   private quitting = false
   private flushedBeforeQuit = false
 
@@ -430,6 +432,17 @@ class TranslateClipApp {
 
     // A finished job is a new history row: push it so an open history list updates
     // without polling.
+    if (next.phase === 'error' && next.error) {
+      const lastNotifiedAt = this.failureNotifiedAt.get(next.error.code) ?? null
+      const shown = notifyTranslationFailure(next, this.config, this.translator, lastNotifiedAt, () =>
+        this.windowManager.showOverlay()
+      )
+
+      if (shown) {
+        this.failureNotifiedAt.set(next.error.code, Date.now())
+      }
+    }
+
     if (next.historyId && (next.phase === 'done' || next.phase === 'error')) {
       const record = this.history.getById(next.historyId)
 

@@ -84,6 +84,9 @@ export const en: LocaleResource = {
       'self-write': 'written by the app itself'
     }
   },
+  notification: {
+    translationFailed: 'Translation failed'
+  },
   tray: {
     showOverlay: 'Show overlay',
     hideOverlay: 'Hide overlay',
@@ -118,6 +121,8 @@ export const en: LocaleResource = {
       launchAtLogin: 'Launch at login',
       launchAtLoginHint: 'Starts silently in the background at login.',
       launchAtLoginUnsupported: 'A development run does not register a startup entry; install the app for this to take effect.',
+      notifications: 'Notify me when a translation fails',
+      notificationsHint: 'Useful when the overlay is hidden or covered by a fullscreen app. The same error is reported at most once a minute.',
       historyLimit: 'History limit',
       historyLimitHint: 'Oldest unpinned entries are removed beyond this limit.',
       rerunOnboarding: 'Run the setup wizard again',

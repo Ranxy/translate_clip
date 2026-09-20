@@ -87,6 +87,9 @@ export const zhCN = {
       'self-write': '应用自身写入'
     }
   },
+  notification: {
+    translationFailed: '翻译失败'
+  },
   tray: {
     showOverlay: '显示浮层',
     hideOverlay: '隐藏浮层',
@@ -121,6 +124,8 @@ export const zhCN = {
       launchAtLogin: '开机自动启动',
       launchAtLoginHint: '开机后静默启动并监听剪贴板。',
       launchAtLoginUnsupported: '开发模式下不会写入系统启动项；安装后此项才会生效。',
+      notifications: '翻译失败时发送系统通知',
+      notificationsHint: '浮层被隐藏或被全屏应用挡住时，通知是唯一能提醒你的方式。同一类错误 60 秒内只提醒一次。',
       historyLimit: '历史记录上限',
       historyLimitHint: '超出后自动删除最旧的非收藏记录。',
       rerunOnboarding: '重新运行初始向导',
