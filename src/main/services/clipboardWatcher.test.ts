@@ -157,6 +157,32 @@ describe('ClipboardWatcher', () => {
     expect(harness.emitted).toEqual([{ text: 'C:\\Users\\ran\\report.pdf', source: 'watch', hasFileList: true }])
   })
 
+  it('flags a Windows file copy, which arrives as an empty uri-list', () => {
+    // Verified against Electron 42 on Windows 11: copying a file yields exactly
+    // `text/uri-list` and `clipboard.readText()` returns an empty string.
+    const harness = createHarness({ initial: 'text copied earlier', formats: ['text/uri-list'] })
+
+    harness.watcher.start()
+    harness.setClipboard('')
+    vi.advanceTimersByTime(1_000)
+
+    expect(harness.emitted).toEqual([{ text: '', source: 'watch', hasFileList: true }])
+  })
+
+  it('does not treat a copied link as a file copy', () => {
+    // Browsers put `text/uri-list` on the clipboard for a copied link too, but
+    // that one comes with its URL as text and must still be translated.
+    const harness = createHarness({ formats: ['text/plain', 'text/uri-list'] })
+
+    harness.watcher.start()
+    harness.setClipboard('https://example.com/some/article')
+    vi.advanceTimersByTime(1_000)
+
+    expect(harness.emitted).toEqual([
+      { text: 'https://example.com/some/article', source: 'watch', hasFileList: false }
+    ])
+  })
+
   it('does not flag ordinary text', () => {
     const harness = createHarness({ formats: ['text/plain', 'text/html'] })
 

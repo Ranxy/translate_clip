@@ -22,6 +22,14 @@ export interface ClipboardContext {
 
 const FILE_LIST_FORMAT_PATTERN = /hdrop|filename|copied-files|file-url/iu
 
+/**
+ * Windows exposes a copied file as `text/uri-list` (Electron's name for CF_HDROP)
+ * with nothing readable through `readText()`. A copied *link* carries the same
+ * format but does come with its URL as text, so the emptiness check is what keeps
+ * "a file was copied" apart from "a URL was copied".
+ */
+const URI_LIST_FORMAT_PATTERN = /uri-list/iu
+
 export interface ClipboardWatcherOptions {
   adapter: ClipboardAdapter
   pollIntervalMs: number
@@ -152,10 +160,10 @@ export class ClipboardWatcher {
     }
 
     this.lastSignature = signature
-    this.options.onCandidate(text, source, { hasFileList: this.detectFileList() })
+    this.options.onCandidate(text, source, { hasFileList: this.detectFileList(text) })
   }
 
-  private detectFileList(): boolean {
+  private detectFileList(text: string): boolean {
     const readFormats = this.options.adapter.readFormats
 
     if (!readFormats) {
@@ -163,7 +171,13 @@ export class ClipboardWatcher {
     }
 
     try {
-      return readFormats().some((format) => FILE_LIST_FORMAT_PATTERN.test(format))
+      const formats = readFormats()
+
+      if (text.length === 0 && formats.some((format) => URI_LIST_FORMAT_PATTERN.test(format))) {
+        return true
+      }
+
+      return formats.some((format) => FILE_LIST_FORMAT_PATTERN.test(format))
     } catch {
       return false
     }
