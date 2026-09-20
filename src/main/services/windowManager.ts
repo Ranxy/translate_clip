@@ -259,6 +259,7 @@ export class WindowManager {
     this.installContextMenu(window)
     this.installLinkHandler(window)
     this.installRendererDiagnostics(window, 'settings')
+    this.installOverlayZOrderHandoff(window)
     this.installWindowStatePersistence(window, 'settings')
 
     window.once('ready-to-show', () => {
@@ -309,6 +310,7 @@ export class WindowManager {
     this.installContextMenu(window)
     this.installLinkHandler(window)
     this.installRendererDiagnostics(window, 'onboarding')
+    this.installOverlayZOrderHandoff(window)
 
     window.once('ready-to-show', () => {
       window.show()
@@ -526,6 +528,35 @@ export class WindowManager {
           log.warn(`[${view}] console ${details.level}: ${details.message}`)
         }
       })
+    }
+  }
+
+  /**
+   * Lets our own windows come to the front without giving up the overlay's priority.
+   *
+   * The overlay sits at `screen-saver` level, which is what keeps it above other
+   * applications — but it would also float above the settings window the user just
+   * opened from it, covering the very controls they are trying to reach. While one of
+   * our normal windows has focus the overlay drops to a normal level; when that window
+   * blurs (or closes) the overlay takes the top back.
+   */
+  private installOverlayZOrderHandoff(window: BrowserWindow): void {
+    window.on('focus', () => this.setOverlayAlwaysOnTop(false))
+    window.on('blur', () => this.setOverlayAlwaysOnTop(true))
+    window.on('closed', () => this.setOverlayAlwaysOnTop(true))
+  }
+
+  private setOverlayAlwaysOnTop(above: boolean): void {
+    const overlay = this.getOverlayWindow()
+
+    if (!overlay) {
+      return
+    }
+
+    overlay.setAlwaysOnTop(above, 'screen-saver')
+
+    if (above) {
+      overlay.moveTop()
     }
   }
 
