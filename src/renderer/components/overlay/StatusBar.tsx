@@ -4,6 +4,7 @@ import type { TranslationState } from '@shared/types'
 
 import { useAppState } from '../../store/appStore'
 import { cn } from '../../utils/cn'
+import { AutoReplaceToggle } from './AutoReplaceToggle'
 import { WatchToggle } from './WatchToggle'
 
 const PHASE_TONE: Record<TranslationState['phase'], string> = {
@@ -41,12 +42,15 @@ export function StatusBar() {
 
   return (
     <footer className="flex items-center gap-2 border-t border-border px-3 py-1.5 text-[11px] text-muted">
-      <span className="flex items-center gap-1.5">
+      {/* The status word must not wrap: with a skip reason and both toggles on screen this row is
+          at its width, and a wrapped word grew the whole bar to two lines. Everything flexible
+          here truncates instead. */}
+      <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
         <span className={cn('h-1.5 w-1.5 rounded-full', PHASE_TONE[translationState.phase])} />
         {phaseLabel}
       </span>
 
-      <span className="text-faint">·</span>
+      <span className="shrink-0 text-faint">·</span>
 
       <span className="truncate" title={activeProfile ? `${activeProfile.modelName}` : undefined}>
         {activeProfile ? `${activeProfile.providerId} / ${activeProfile.modelName}` : t('settings.providers.none')}
@@ -60,9 +64,11 @@ export function StatusBar() {
             {skipLabel}
           </span>
 
-          <span className="text-faint">·</span>
+          <span className="shrink-0 text-faint">·</span>
         </>
       ) : null}
+
+      <AutoReplaceToggle />
 
       <WatchToggle variant="text" />
     </footer>

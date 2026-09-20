@@ -39,6 +39,7 @@ describe('TranslationQueue', () => {
   let history: HistoryRepository
   let server: StubServer
   let states: TranslationState[]
+  let written: string[]
   let config: AppConfig
   let activeConfig: ResolvedLlmConfig | null
 
@@ -49,7 +50,8 @@ describe('TranslationQueue', () => {
       getActiveConfig: () => activeConfig,
       history,
       buildSystemPrompt: () => 'translate this',
-      onState: (state) => states.push(state)
+      onState: (state) => states.push(state),
+      writeClipboard: (text) => written.push(text)
     })
 
   beforeEach(async () => {
@@ -58,6 +60,7 @@ describe('TranslationQueue', () => {
     await database.load()
     history = new HistoryRepository(database, createFakeLogger())
     states = []
+    written = []
     config = { ...DEFAULT_CONFIG }
   })
 
@@ -103,6 +106,45 @@ describe('TranslationQueue', () => {
       detectedLanguage: 'en',
       sourceText: 'Hello world'
     })
+  })
+
+  it('puts the finished translation on the clipboard when the user asked for it', async () => {
+    await useServer()
+    config = { ...DEFAULT_CONFIG, autoReplaceClipboard: true }
+
+    const queue = createQueue()
+    queue.submit(job('Hello world'))
+    await waitFor(() => states.at(-1)?.phase === 'done')
+
+    expect(written).toEqual(['你好'])
+  })
+
+  it('leaves the clipboard alone by default', async () => {
+    await useServer()
+
+    const queue = createQueue()
+    queue.submit(job('Hello world'))
+    await waitFor(() => states.at(-1)?.phase === 'done')
+
+    expect(written).toEqual([])
+  })
+
+  it('does not replace the clipboard when the translation failed', async () => {
+    server = await startStubServer({ status: 500, body: 'nope' })
+    activeConfig = {
+      profileId: 'profile-1',
+      providerId: 'custom',
+      apiBaseUrl: server.baseUrl,
+      modelName: 'test-model',
+      apiKey: null
+    }
+    config = { ...DEFAULT_CONFIG, autoReplaceClipboard: true, retryCount: 0 }
+
+    const queue = createQueue()
+    queue.submit(job('Hello world'))
+    await waitFor(() => states.at(-1)?.phase === 'error')
+
+    expect(written).toEqual([])
   })
 
   it('replaces the request in flight when a newer copy arrives', async () => {

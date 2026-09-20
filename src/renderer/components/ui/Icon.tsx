@@ -152,3 +152,15 @@ export function IconTrash(props: IconProps) {
     </Icon>
   )
 }
+
+/** A clipboard something is going into: the auto-replace toggle. */
+export function IconClipboardIn(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9.5 13.5H4a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1" />
+      <path d="M7.5 2.5H9a1 1 0 0 1 1 1v2" />
+      <path d="M5.2 2.5h2.1v1.4H5.2z" />
+      <path d="M9.5 9.5h4M11.6 7.6l1.9 1.9-1.9 1.9" />
+    </Icon>
+  )
+}

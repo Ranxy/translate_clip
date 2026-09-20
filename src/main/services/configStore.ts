@@ -250,6 +250,7 @@ export function sanitizeConfig(input: unknown, warn: Warn = () => undefined): Ap
     retryCount: clampNumber(source.retryCount, DEFAULT_CONFIG.retryCount, APP_LIMITS.retryCount, true, warn, 'retryCount'),
     streamEnabled: sanitizeBoolean(source.streamEnabled, DEFAULT_CONFIG.streamEnabled),
     translationCacheEnabled: sanitizeBoolean(source.translationCacheEnabled, DEFAULT_CONFIG.translationCacheEnabled),
+    autoReplaceClipboard: sanitizeBoolean(source.autoReplaceClipboard, DEFAULT_CONFIG.autoReplaceClipboard),
     cacheTtlHours: clampNumber(source.cacheTtlHours, DEFAULT_CONFIG.cacheTtlHours, APP_LIMITS.cacheTtlHours, true, warn, 'cacheTtlHours'),
     glossaryEnabled: sanitizeBoolean(source.glossaryEnabled, DEFAULT_CONFIG.glossaryEnabled),
     glossaryMaxTerms: clampNumber(source.glossaryMaxTerms, DEFAULT_CONFIG.glossaryMaxTerms, APP_LIMITS.glossaryMaxTerms, true, warn, 'glossaryMaxTerms'),

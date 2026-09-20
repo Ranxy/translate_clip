@@ -133,7 +133,10 @@ class TranslateClipApp {
       getActiveConfig: () => this.llmConfigStore.getResolvedConfig(),
       history: this.history,
       buildSystemPrompt: (direction, text) => buildSystemPrompt(this.config, direction, text),
-      onState: (state) => this.setTranslationState(state)
+      onState: (state) => this.setTranslationState(state),
+      // The watcher's own write path, so the replacement is suppressed rather than translated
+      // back (see TranslationQueueOptions.writeClipboard).
+      writeClipboard: (text) => this.clipboardWatcher.writeText(text)
     })
 
     this.clipboardWatcher = new ClipboardWatcher({

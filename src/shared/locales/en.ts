@@ -49,6 +49,8 @@ export const en: LocaleResource = {
     paused: 'Paused',
     pauseWatching: 'Pause watching',
     resumeWatching: 'Resume watching',
+    autoReplaceEnable: 'Replace the clipboard with each translation',
+    autoReplaceDisable: 'Stop replacing the clipboard',
     pauseAction: 'Pause',
     resumeAction: 'Resume',
     clickThroughHint: 'Click-through is on: turn it off from the tray menu.',

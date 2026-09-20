@@ -279,6 +279,8 @@ export interface AppConfig {
   retryCount: number
   streamEnabled: boolean
   translationCacheEnabled: boolean
+  /** Puts each finished translation on the clipboard, replacing the text that was copied. */
+  autoReplaceClipboard: boolean
   cacheTtlHours: number
   glossaryEnabled: boolean
   glossaryMaxTerms: number

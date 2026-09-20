@@ -172,6 +172,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   retryCount: 2,
   streamEnabled: false,
   translationCacheEnabled: true,
+  autoReplaceClipboard: false,
   cacheTtlHours: 24,
   glossaryEnabled: true,
   glossaryMaxTerms: 30,

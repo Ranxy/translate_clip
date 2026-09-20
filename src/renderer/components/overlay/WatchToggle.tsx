@@ -82,7 +82,7 @@ export function WatchToggle({ variant = 'chip' }: { variant?: WatchToggleVariant
       aria-label={action}
       onClick={toggle}
       className={cn(
-        'rounded px-1 transition-colors hover:bg-surface-hover hover:text-text',
+        'shrink-0 whitespace-nowrap rounded px-1 transition-colors hover:bg-surface-hover hover:text-text',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent',
         watching ? undefined : 'text-accent'
       )}

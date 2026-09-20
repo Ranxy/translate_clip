@@ -18,6 +18,14 @@ export interface TranslationQueueOptions {
   history: HistoryRepository
   buildSystemPrompt: (direction: TranslationDirection, text: string) => string
   onState: (state: TranslationState) => void
+  /**
+   * Puts text on the clipboard on the app's behalf.
+   *
+   * Wired to the clipboard watcher's own write path rather than to `clipboard.writeText`, because
+   * that path is what marks the value as ours — without it the auto-replace feature would
+   * translate its own output forever.
+   */
+  writeClipboard?: (text: string) => void
 }
 
 /**
@@ -109,7 +117,7 @@ export class TranslationQueue {
 
       if (cached?.translatedText) {
         this.controller = null
-        this.options.onState(
+        this.reportDone(
           this.buildState({
             phase: 'done',
             job,
@@ -184,7 +192,7 @@ export class TranslationQueue {
       attempts: result.attempts,
       target: direction.targetLanguage
     })
-    this.options.onState(
+    this.reportDone(
       this.buildState({
         phase: 'done',
         job,
@@ -196,6 +204,21 @@ export class TranslationQueue {
         cached: false
       })
     )
+  }
+
+  /**
+   * Publishes a finished translation and, when the user asked for it, puts it on the clipboard.
+   *
+   * The write goes through the watcher's own write path (the injected `writeClipboard`), so the
+   * app recognises the new clipboard content as its own instead of translating it straight back —
+   * an auto-replace that fed itself would be an endless loop of translations.
+   */
+  private reportDone(state: TranslationState): void {
+    this.options.onState(state)
+
+    if (state.translatedText && this.options.getConfig().autoReplaceClipboard) {
+      this.options.writeClipboard?.(state.translatedText)
+    }
   }
 
   private buildState(input: {

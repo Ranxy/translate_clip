@@ -52,6 +52,8 @@ export const zhCN = {
     paused: '已暂停',
     pauseWatching: '暂停监听',
     resumeWatching: '恢复监听',
+    autoReplaceEnable: '开启自动替换剪贴板:译文会覆盖你复制的内容',
+    autoReplaceDisable: '关闭自动替换剪贴板',
     pauseAction: '暂停',
     resumeAction: '恢复',
     clickThroughHint: '鼠标穿透已开启:请从托盘菜单关闭。',
