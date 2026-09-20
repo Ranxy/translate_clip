@@ -96,15 +96,33 @@ function CurrentPanel() {
   )
 }
 
+/**
+ * Turns the configured text size into a scale factor.
+ *
+ * The overlay's classes are in fixed pixels, so a root `zoom` is what actually makes
+ * the setting do something: it scales text, padding and controls together, which is
+ * what "make the overlay bigger" means in practice.
+ *
+ * A plain function rather than a hook: the overlay reads its config from the store it
+ * already subscribes to, and a hook called after the collapsed-state early return
+ * would change the hook order when the user collapses the window.
+ */
+const BASE_FONT_SIZE = 14
+
+function overlayZoom(fontSize: number): number {
+  return fontSize / BASE_FONT_SIZE
+}
+
 function CollapsedBar() {
   const { t } = useTranslation()
   const store = useAppStore()
-  const { translationState } = useAppState()
+  const { translationState, bootstrap } = useAppState()
+  const zoom = overlayZoom(bootstrap.config.overlay.fontSize)
 
   const preview = translationState.translatedText ?? translationState.sourceText ?? t('overlay.emptyTitle')
 
   return (
-    <div className="h-screen w-screen p-2">
+    <div className="h-screen w-screen p-2" style={{ zoom }}>
       <div
         className="flex h-full items-center gap-2 rounded-xl border border-border bg-surface px-3 backdrop-blur-2xl"
         style={dragRegion}
@@ -134,6 +152,7 @@ export function OverlayShell() {
   const { config, capabilities } = state.bootstrap
   const { translationState, clipboardStatus } = state
   const opaque = config.overlay.opaque
+  const zoom = overlayZoom(config.overlay.fontSize)
 
   if (config.overlay.collapsed) {
     return <CollapsedBar />
@@ -150,7 +169,7 @@ export function OverlayShell() {
   const canCopy = Boolean(translationState.translatedText)
 
   return (
-    <div className="h-screen w-screen p-2">
+    <div className="h-screen w-screen p-2" style={{ zoom }}>
       <div
         className={cn(
           'flex h-full flex-col overflow-hidden rounded-xl border border-border',

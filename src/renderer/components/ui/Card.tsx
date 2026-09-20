@@ -1,9 +1,13 @@
-import type { ReactNode } from 'react'
+import type { HTMLAttributes, ReactNode } from 'react'
 
 import { cn } from '../../utils/cn'
 
-export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={cn('rounded-xl border border-border bg-surface-strong p-4', className)}>{children}</section>
+export function Card({ children, className, ...rest }: { children: ReactNode; className?: string } & HTMLAttributes<HTMLElement>) {
+  return (
+    <section className={cn('rounded-xl border border-border bg-surface-strong p-4', className)} {...rest}>
+      {children}
+    </section>
+  )
 }
 
 export function CardHeader({ title, description, action }: { title: ReactNode; description?: ReactNode; action?: ReactNode }) {

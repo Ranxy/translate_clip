@@ -48,6 +48,41 @@ export function GeneralPage() {
         </Field>
       </Card>
 
+      <Card data-settings-section="overlay">
+        <CardHeader title={t('settings.general.overlaySection')} />
+
+        <Field label={t('settings.general.overlayOpacity')} hint={t('settings.general.overlayOpacityHint')}>
+          <NumberInput
+            value={config.overlay.opacity}
+            min={APP_LIMITS.overlayOpacity.min}
+            max={APP_LIMITS.overlayOpacity.max}
+            step={APP_LIMITS.overlayOpacity.step}
+            onCommit={(value) => void store.updateConfig({ overlay: { ...config.overlay, opacity: value } })}
+          />
+        </Field>
+
+        <Divider />
+
+        <Field label={t('settings.general.overlayFontSize')} hint={t('settings.general.overlayFontSizeHint')}>
+          <NumberInput
+            value={config.overlay.fontSize}
+            min={APP_LIMITS.overlayFontSize.min}
+            max={APP_LIMITS.overlayFontSize.max}
+            onCommit={(value) => void store.updateConfig({ overlay: { ...config.overlay, fontSize: value } })}
+          />
+        </Field>
+
+        <Divider />
+
+        <Field label={t('settings.general.overlayOpaque')} hint={t('settings.general.overlayOpaqueHint')}>
+          <Switch
+            label={t('settings.general.overlayOpaque')}
+            checked={config.overlay.opaque}
+            onChange={(checked) => void store.updateConfig({ overlay: { ...config.overlay, opaque: checked } })}
+          />
+        </Field>
+      </Card>
+
       <Card>
         <CardHeader title={t('settings.general.behavior')} />
 

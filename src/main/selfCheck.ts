@@ -470,6 +470,12 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
       if (target.view === 'settings' && bridge === 'object' && root.children > 0) {
         // Sequential rather than parallel: they all click tabs in the same window.
         const tabs = [
+          await checkSettingsTab(
+            window,
+            'general',
+            "document.querySelectorAll('[data-settings-section=\"overlay\"] input[type=number]').length === 2",
+            'the overlay appearance controls rendered'
+          ),
           await checkSettingsTab(window, 'providers', "document.body.innerText.includes('DeepSeek')", 'the provider catalogue rendered'),
           await checkSettingsTab(
             window,
