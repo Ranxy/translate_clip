@@ -3,6 +3,7 @@ import { access, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import type { Logger } from './services/logStore'
+import { startStubServer, type StubServer } from './testing/stubServer'
 
 export interface SelfCheckTarget {
   view: 'overlay' | 'settings' | 'onboarding'
@@ -37,6 +38,130 @@ const VIEWS: SelfCheckTarget[] = [
 ]
 
 const PIPELINE_SAMPLE_TEXT = 'Hello clipboard pipeline'
+const TRANSLATION_MARKER = 'self-check translation marker'
+
+interface BootstrapShape {
+  llmProviderState?: { profiles?: Array<{ profileId: string }>; activeProfileId?: string | null }
+}
+
+/**
+ * Proves the whole translation path without a credential or a network call.
+ *
+ * A stub OpenAI-compatible endpoint is started on loopback, a throwaway profile
+ * pointing at it is saved, and the result is asserted in the overlay. The user's
+ * real profiles are never used: the temporary profile is made active for the
+ * duration and the previously active profile is restored afterwards, so the check
+ * cannot accidentally spend someone's quota on a real provider.
+ */
+async function checkTranslationFlow(window: BrowserWindow, log: Logger): Promise<SelfCheckEntry> {
+  const name = 'translation flow'
+  // Unique per run, so a cached translation from an earlier check can never make
+  // this pass without the provider actually being called.
+  const sampleText = `self-check ${Date.now()}`
+  let server: StubServer | null = null
+  let createdProfileId: string | null = null
+  let previousActiveProfileId: string | null = null
+
+  try {
+    const before = (await window.webContents.executeJavaScript('window.translateClip.getBootstrapData()')) as BootstrapShape
+    previousActiveProfileId = before.llmProviderState?.activeProfileId ?? null
+
+    server = await startStubServer({
+      status: 200,
+      body: {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({ detectedLanguage: 'en', translatedText: TRANSLATION_MARKER })
+            }
+          }
+        ]
+      }
+    })
+
+    const saved = (await window.webContents.executeJavaScript(
+      `window.translateClip.saveLlmProviderProfile({
+        providerId: 'custom',
+        modelName: 'self-check',
+        apiKey: 'self-check',
+        apiBaseUrl: ${JSON.stringify(server.baseUrl)},
+        customLabel: 'self-check'
+      })`
+    )) as BootstrapShape
+
+    createdProfileId =
+      saved.llmProviderState?.profiles?.find((profile) => profile.profileId !== previousActiveProfileId)?.profileId ?? null
+
+    if (!createdProfileId) {
+      return { name, ok: false, detail: 'the temporary provider profile was not created' }
+    }
+
+    await window.webContents.executeJavaScript(
+      `window.translateClip.setActiveLlmProviderProfile(${JSON.stringify(createdProfileId)})`
+    )
+    await window.webContents.executeJavaScript(
+      `window.translateClip.debugInjectClipboard(${JSON.stringify(sampleText)})`
+    )
+
+    const deadline = Date.now() + 10_000
+    let bodyText = ''
+
+    for (;;) {
+      bodyText = await window.webContents.executeJavaScript('document.body.innerText')
+
+      if (bodyText.includes(TRANSLATION_MARKER)) {
+        if (server.requests.length === 0) {
+          return { name, ok: false, detail: 'the overlay showed a translation without the provider being called' }
+        }
+
+        return {
+          name,
+          ok: true,
+          detail: `stubbed provider answered after ${server.requests.length} request(s); the overlay rendered the translation`
+        }
+      }
+
+      if (Date.now() > deadline) {
+        log.warn(`self-check translation body text: ${bodyText.slice(0, 200)}`)
+        return { name, ok: false, detail: `the overlay never showed the translation (requests=${server.requests.length})` }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+  } catch (error) {
+    return { name, ok: false, detail: (error as Error).message }
+  } finally {
+    // Always clean up: the temporary profile and the sample translation must never
+    // outlive the check, so a diagnostic run leaves no trace in the user's data.
+    try {
+      if (createdProfileId) {
+        await window.webContents.executeJavaScript(
+          `window.translateClip.deleteLlmProviderProfile(${JSON.stringify(createdProfileId)})`
+        )
+      }
+
+      if (previousActiveProfileId && previousActiveProfileId !== createdProfileId) {
+        await window.webContents.executeJavaScript(
+          `window.translateClip.setActiveLlmProviderProfile(${JSON.stringify(previousActiveProfileId)})`
+        )
+      }
+
+      const page = (await window.webContents.executeJavaScript(
+        `window.translateClip.listHistory({ query: ${JSON.stringify(sampleText)}, limit: 50 })`
+      )) as { items?: Array<{ id: string; sourceText: string }> }
+
+      for (const item of page.items ?? []) {
+        if (item.sourceText === sampleText) {
+          await window.webContents.executeJavaScript(`window.translateClip.removeHistoryEntry(${JSON.stringify(item.id)})`)
+        }
+      }
+    } catch (error) {
+      log.warn('self-check could not fully restore the provider configuration', error)
+    }
+
+    await server?.close()
+  }
+}
 
 /**
  * Drives the real clipboard pipeline (filter → language detection → direction →
@@ -175,6 +300,9 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
       if (target.view === 'overlay' && bridge === 'object' && root.children > 0) {
         const pipeline = await checkClipboardPipeline(window, options.log)
         push(pipeline.name, pipeline.ok, pipeline.detail)
+
+        const translation = await checkTranslationFlow(window, options.log)
+        push(translation.name, translation.ok, translation.detail)
       }
     } catch (error) {
       push(target.label, false, (error as Error).message)

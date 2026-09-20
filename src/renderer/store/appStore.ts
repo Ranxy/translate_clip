@@ -102,7 +102,8 @@ export class AppStore {
     return window.translateClip.listHistory(query)
   }
 
-  private applyBootstrap(bootstrap: BootstrapPayload): void {
+  /** Applies a bootstrap payload returned by a mutating IPC call. */
+  applyBootstrap(bootstrap: BootstrapPayload): void {
     const previousLanguage = this.state.bootstrap.config.uiLanguage
     this.setState({
       bootstrap,

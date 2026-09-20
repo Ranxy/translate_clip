@@ -10,11 +10,18 @@ import type {
   ClipboardActivitySource,
   ClipboardStatus,
   DiagnosticsInfo,
+  FetchLlmProviderModelsInput,
+  GlossaryEntry,
   HistoryPage,
   HistoryQuery,
+  LlmConnectionTestInput,
+  LlmConnectionTestResult,
+  LlmProviderId,
   LlmProviderState,
+  SaveLlmProviderProfileInput,
   ShortcutAction,
   ShortcutState,
+  TranslationRecord,
   TranslationState
 } from '@shared/types'
 
@@ -26,9 +33,14 @@ import { ClipboardWatcher } from './services/clipboardWatcher'
 import { compileIgnorePatterns, filterClipboardText, type FilterContext } from './services/clipboardFilter'
 import { ConfigStore } from './services/configStore'
 import { createCredentialStore, type CredentialStore } from './services/credentialStore'
+import { createDatabaseService, type DatabaseService } from './services/database'
+import { HistoryRepository } from './services/historyRepository'
 import { detectLanguage, resolveDirection } from './services/languageDetector'
-import { createEmptyProviderState } from './services/llmProviderCatalog'
+import { checkProviderConnection, toLlmError } from './services/llmClient'
+import { LlmConfigStore } from './services/llmConfigStore'
+import { fetchProviderModels, resolveApiBaseUrl } from './services/llmProviderCatalog'
 import { buildSystemPrompt } from './services/promptBuilder'
+import { TranslationQueue } from './services/translationQueue'
 import { createLogger, type Logger } from './services/logStore'
 import { ShortcutManager } from './services/shortcutManager'
 import { TrayController } from './services/trayController'
@@ -36,7 +48,7 @@ import { WindowManager } from './services/windowManager'
 import { WindowStateStore } from './services/windowStateStore'
 import { runSelfCheck, type SelfCheckReport } from './selfCheck'
 import { toPreview } from './utils/hash'
-import { getLogsPath, resolveResourcePath } from './utils/paths'
+import { getLogsPath, getUserDataPath, resolveResourcePath } from './utils/paths'
 
 /* ── Command line switches (must run before app is ready) ──────────── */
 
@@ -83,6 +95,10 @@ class TranslateClipApp {
   private readonly tray: TrayController
   private readonly credentialStore: CredentialStore
   private readonly clipboardWatcher: ClipboardWatcher
+  private readonly database: DatabaseService
+  private readonly llmConfigStore: LlmConfigStore
+  private readonly history: HistoryRepository
+  private readonly translationQueue: TranslationQueue
 
   private config: AppConfig = structuredClone(DEFAULT_CONFIG)
   private translator: Translator
@@ -93,6 +109,7 @@ class TranslateClipApp {
   private ignorePatterns: RegExp[] = []
   private lastAcceptedHash: string | null = null
   private quitting = false
+  private flushedBeforeQuit = false
 
   constructor() {
     this.logger = createLogger(getLogsPath('main.log'), DEFAULT_CONFIG.logLevel)
@@ -103,6 +120,18 @@ class TranslateClipApp {
     this.capabilities = createCapabilityRegistry(this.logger)
     this.credentialStore = createCredentialStore(this.logger)
     this.translator = createTranslator(null)
+
+    this.database = createDatabaseService({ filePath: getUserDataPath('data.sqlite'), log: this.logger })
+    this.llmConfigStore = new LlmConfigStore(this.database, this.credentialStore, this.logger)
+    this.history = new HistoryRepository(this.database, this.logger)
+    this.translationQueue = new TranslationQueue({
+      log: this.logger,
+      getConfig: () => this.config,
+      getActiveConfig: () => this.llmConfigStore.getResolvedConfig(),
+      history: this.history,
+      buildSystemPrompt: (direction, text) => buildSystemPrompt(this.config, direction, text),
+      onState: (state) => this.setTranslationState(state)
+    })
 
     this.clipboardWatcher = new ClipboardWatcher({
       adapter: {
@@ -176,6 +205,7 @@ class TranslateClipApp {
 
   async initialize(): Promise<void> {
     this.config = await this.configStore.load()
+    await this.database.load()
     await this.windowStateStore.load()
 
     this.logger.setLevel(this.config.logLevel)
@@ -229,8 +259,7 @@ class TranslateClipApp {
     // remote session disconnect) must not silently swallow the first-run flow.
     this.windowManager.openOnboardingWindow(() => {
       this.logger.warn('onboarding window closed without an explicit finish; first-run setup stays pending')
-    })
-  }
+    })  }
 
   /* ── Config ──────────────────────────────────────────────────────── */
 
@@ -360,26 +389,35 @@ class TranslateClipApp {
       direction
     })
 
-    this.setTranslationState({
-      phase: activeProfile ? 'idle' : 'unconfigured',
-      sourceText: result.text,
-      translatedText: null,
-      direction,
-      providerId: activeProfile?.providerId ?? null,
-      modelName: activeProfile?.modelName ?? null,
-      historyId: null,
-      error: null,
-      skipReason: null,
-      latencyMs: null,
-      cached: false
-    })
-
     if (this.config.llmDebugEnabled) {
       this.logger.info('translation request prepared', {
         direction,
+        providerId: activeProfile?.providerId ?? null,
         systemPrompt: buildSystemPrompt(this.config, direction, result.text)
       })
     }
+
+    if (!activeProfile) {
+      // Nothing to send to yet: show what was captured plus the setup call to action.
+      this.setTranslationState({
+        phase: 'unconfigured',
+        sourceText: result.text,
+        translatedText: null,
+        direction,
+        providerId: null,
+        modelName: null,
+        historyId: null,
+        error: null,
+        skipReason: null,
+        latencyMs: null,
+        cached: false
+      })
+      return
+    }
+
+    // The queue owns the state from here: it reports translating → done/error and
+    // aborts any request that a newer copy has already made obsolete.
+    this.translationQueue.submit({ text: result.text, hash: result.hash, direction })
   }
 
   private setTranslationState(next: TranslationState): void {
@@ -397,8 +435,68 @@ class TranslateClipApp {
   }
 
   private getActiveProfile(): LlmProviderState['profiles'][number] | null {
-    const state = this.buildProviderState()
+    const state = this.llmConfigStore.getState()
     return state.profiles.find((profile) => profile.profileId === state.activeProfileId) ?? null
+  }
+
+  private publishProviderState(): BootstrapPayload {
+    this.windowManager.broadcast('llm:state', this.llmConfigStore.getState())
+    return this.buildBootstrapPayload()
+  }
+
+  private getApiBaseUrlFor(providerId: LlmProviderId, profileId?: string, explicit?: string): string {
+    const fromProfile = profileId
+      ? this.llmConfigStore.getState().profiles.find((profile) => profile.profileId === profileId)?.apiBaseUrl
+      : undefined
+
+    return resolveApiBaseUrl(providerId, explicit ?? fromProfile)
+  }
+
+  /**
+   * Prefers a key the user just typed (not saved yet), then the profile's stored
+   * key, then the active profile's — so "test connection" works before saving.
+   */
+  private resolveApiKeyFor(input: { profileId?: string; apiKey?: string }): string | null {
+    if (typeof input.apiKey === 'string' && input.apiKey.trim().length > 0) {
+      return input.apiKey.trim()
+    }
+
+    if (input.profileId) {
+      return this.llmConfigStore.getApiKey(input.profileId)
+    }
+
+    return this.llmConfigStore.getResolvedConfig()?.apiKey ?? null
+  }
+
+  private saveGlossaryEntry(entry: GlossaryEntry): Promise<BootstrapPayload> {
+    const others = this.configStore.getConfig().glossary.filter((existing) => existing.id !== entry.id)
+    return this.updateConfig({ glossary: [...others, entry] })
+  }
+
+  private importGlossary(json: string): Promise<BootstrapPayload> {
+    let parsed: unknown
+
+    try {
+      parsed = JSON.parse(json) as unknown
+    } catch {
+      throw new Error('The glossary file is not valid JSON.')
+    }
+
+    const incoming = Array.isArray(parsed) ? parsed : (parsed as { glossary?: unknown })?.glossary
+
+    if (!Array.isArray(incoming)) {
+      throw new Error('The glossary file does not contain a list of entries.')
+    }
+
+    const merged = new Map(this.configStore.getConfig().glossary.map((entry) => [entry.id, entry]))
+
+    for (const entry of incoming) {
+      if (entry && typeof entry === 'object' && typeof (entry as GlossaryEntry).id === 'string') {
+        merged.set((entry as GlossaryEntry).id, entry as GlossaryEntry)
+      }
+    }
+
+    return this.updateConfig({ glossary: [...merged.values()] })
   }
 
   private publishClipboardActivity(activity: ClipboardActivity): void {
@@ -430,8 +528,22 @@ class TranslateClipApp {
   /* ── Snapshots ───────────────────────────────────────────────────── */
 
   private buildProviderState(): LlmProviderState {
-    // Phase 1 replaces this with the sql.js profile store snapshot.
-    return createEmptyProviderState()
+    return this.llmConfigStore.getState()
+  }
+
+  /**
+   * History for the bootstrap payload.
+   *
+   * Guarded because the overlay must be able to start even if the database could
+   * not be opened — a broken history file must never take the whole app down.
+   */
+  private getRecentHistory(): TranslationRecord[] {
+    try {
+      return this.history.list({ limit: 20 }).items
+    } catch (error) {
+      this.logger.warn('history is unavailable', error)
+      return []
+    }
   }
 
   private getDiagnostics(): DiagnosticsInfo {
@@ -454,7 +566,7 @@ class TranslateClipApp {
       diagnostics: this.getDiagnostics(),
       translationState: this.translationState,
       clipboardStatus: this.getClipboardStatus(),
-      recentHistory: [],
+      recentHistory: this.getRecentHistory(),
       pendingOnboarding: !this.config.onboardingCompleted,
       shortcutState: this.shortcutManager.getState()
     }
@@ -463,10 +575,6 @@ class TranslateClipApp {
   /* ── IPC surface ─────────────────────────────────────────────────── */
 
   private buildIpcHandlers(): Record<string, IpcHandler> {
-    const notImplemented = (feature: string) => (): never => {
-      throw new Error(`${feature} is not available in this build yet`)
-    }
-
     return {
       'app:getBootstrapData': () => this.buildBootstrapPayload(),
       'app:getDiagnostics': () => this.getDiagnostics(),
@@ -485,8 +593,8 @@ class TranslateClipApp {
 
       'app:setClipboardWatch': (enabled: boolean) => this.updateConfig({ clipboardWatchEnabled: enabled }),
       'app:translateClipboardNow': () => this.translateClipboardNow(),
-      'app:retranslateLast': notImplemented('Re-translation'),
-      'app:cancelTranslation': notImplemented('Cancelling a translation'),
+      'app:retranslateLast': () => this.translationQueue.retranslate(),
+      'app:cancelTranslation': () => this.translationQueue.cancel(),
 
       'clipboard:writeText': (text: string) => {
         // Goes through the watcher so the app's own write is suppressed instead of
@@ -494,25 +602,65 @@ class TranslateClipApp {
         this.clipboardWatcher.writeText(text)
       },
 
-      'history:list': notImplemented('Translation history') as unknown as (
-        query: HistoryQuery
-      ) => Promise<HistoryPage>,
-      'history:togglePin': notImplemented('Translation history'),
-      'history:remove': notImplemented('Translation history'),
-      'history:clear': notImplemented('Translation history'),
-      'history:copyTranslation': notImplemented('Translation history'),
+      /* ── History ─────────────────────────────────────────────────── */
 
-      'llm:saveProviderProfile': notImplemented('Provider profiles'),
-      'llm:deleteProviderProfile': notImplemented('Provider profiles'),
-      'llm:setActiveProviderProfile': notImplemented('Provider profiles'),
-      'llm:fetchModels': notImplemented('Fetching provider models'),
-      'llm:getApiKey': () => null,
-      'llm:testConnection': notImplemented('Connection tests'),
+      'history:list': (query: HistoryQuery): HistoryPage => this.history.list(query ?? {}),
+      'history:togglePin': (id: string) => this.history.togglePin(id),
+      'history:remove': (id: string) => this.history.remove(id),
+      'history:clear': (keepPinned: boolean) => this.history.clear(keepPinned !== false),
+      'history:copyTranslation': (id: string) => {
+        const record = this.history.getById(id)
 
-      'glossary:save': notImplemented('The glossary'),
-      'glossary:delete': notImplemented('The glossary'),
-      'glossary:import': notImplemented('The glossary'),
-      'glossary:export': notImplemented('The glossary'),
+        if (!record?.translatedText) {
+          throw new Error('That entry has no translation to copy.')
+        }
+
+        this.clipboardWatcher.writeText(record.translatedText)
+      },
+
+      /* ── Providers ───────────────────────────────────────────────── */
+
+      'llm:saveProviderProfile': async (input: SaveLlmProviderProfileInput) => {
+        await this.llmConfigStore.saveProfile(input)
+        return this.publishProviderState()
+      },
+      'llm:deleteProviderProfile': async (profileId: string) => {
+        await this.llmConfigStore.deleteProfile(profileId)
+        return this.publishProviderState()
+      },
+      'llm:setActiveProviderProfile': async (profileId: string) => {
+        await this.llmConfigStore.setActiveProfile(profileId)
+        return this.publishProviderState()
+      },
+      'llm:getApiKey': (profileId: string) => this.llmConfigStore.getApiKey(profileId),
+      'llm:fetchModels': (input: FetchLlmProviderModelsInput) =>
+        fetchProviderModels({
+          apiBaseUrl: this.getApiBaseUrlFor(input.providerId, input.profileId, input.apiBaseUrl),
+          apiKey: this.resolveApiKeyFor(input)
+        }),
+      'llm:testConnection': async (input: LlmConnectionTestInput): Promise<LlmConnectionTestResult> => {
+        const startedAt = Date.now()
+
+        try {
+          await checkProviderConnection({
+            apiBaseUrl: this.getApiBaseUrlFor(input.providerId, input.profileId, input.apiBaseUrl),
+            apiKey: this.resolveApiKeyFor(input),
+            timeoutMs: 15_000
+          })
+
+          return { ok: true, latencyMs: Date.now() - startedAt, error: null }
+        } catch (error) {
+          return { ok: false, latencyMs: Date.now() - startedAt, error: toLlmError(error) }
+        }
+      },
+
+      /* ── Glossary ────────────────────────────────────────────────── */
+
+      'glossary:save': (entry: GlossaryEntry) => this.saveGlossaryEntry(entry),
+      'glossary:delete': (id: string) =>
+        this.updateConfig({ glossary: this.configStore.getConfig().glossary.filter((entry) => entry.id !== id) }),
+      'glossary:import': (json: string) => this.importGlossary(json),
+      'glossary:export': () => JSON.stringify(this.configStore.getConfig().glossary, null, 2),
 
       'shortcut:set': async (action: ShortcutAction, accelerator: string | null) => {
         const result = this.shortcutManager.set(action, accelerator)
@@ -629,6 +777,16 @@ class TranslateClipApp {
 
   /* ── Diagnostics ─────────────────────────────────────────────────── */
 
+  /**
+   * Forces pending writes to disk.
+   *
+   * Needed before `app.exit()`, which skips the `before-quit` hook and would
+   * otherwise drop everything still sitting in the debounced write buffer.
+   */
+  async flushDatabase(): Promise<void> {
+    await this.database.flush()
+  }
+
   async runSelfCheck(): Promise<SelfCheckReport> {
     return runSelfCheck({
       preloadPath: this.preloadPath,
@@ -656,11 +814,28 @@ class TranslateClipApp {
     this.windowManager.broadcast('theme:update', this.config.theme)
   }
 
-  handleBeforeQuit(): void {
+  handleBeforeQuit(event: Electron.Event): void {
     this.quitting = true
+
+    if (this.flushedBeforeQuit) {
+      return
+    }
+
+    // History writes are debounced, so the newest translations are still only in
+    // memory at this point. Block the quit exactly once to get them onto disk.
+    event.preventDefault()
     this.clipboardWatcher.stop()
-    this.shortcutManager.dispose()
-    this.tray.destroy()
+    this.translationQueue.dispose()
+
+    void this.database
+      .flush()
+      .catch((error) => this.logger.warn('failed to flush the database during shutdown', error))
+      .finally(() => {
+        this.flushedBeforeQuit = true
+        this.shortcutManager.dispose()
+        this.tray.destroy()
+        app.quit()
+      })
   }
 
   shouldQuitOnAllWindowsClosed(): boolean {
@@ -721,6 +896,7 @@ if (!hasSingleInstanceLock) {
 
     if (SELF_CHECK) {
       const report = await translateClip.runSelfCheck()
+      await translateClip.flushDatabase()
       process.stdout.write(`\n[self-check] ${report.ok ? 'PASSED' : 'FAILED'} ${JSON.stringify(report.entries, null, 2)}\n`)
       app.exit(report.ok ? 0 : 1)
       return
@@ -737,8 +913,8 @@ if (!hasSingleInstanceLock) {
     })
   })
 
-  app.on('before-quit', () => {
-    translateClip.handleBeforeQuit()
+  app.on('before-quit', (event) => {
+    translateClip.handleBeforeQuit(event)
   })
 
   app.on('window-all-closed', () => {

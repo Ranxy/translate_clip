@@ -7,6 +7,7 @@ import { AboutPage } from './AboutPage'
 import { ClipboardPage } from './ClipboardPage'
 import { GeneralPage } from './GeneralPage'
 import { PlannedPage } from './PlannedPage'
+import { ProvidersPage } from './ProvidersPage'
 
 type SettingsTab = 'general' | 'clipboard' | 'providers' | 'prompt' | 'glossary' | 'shortcuts' | 'about'
 
@@ -49,7 +50,7 @@ export function SettingsShell() {
         <div className="mx-auto flex max-w-2xl flex-col gap-4">
           {tab === 'general' ? <GeneralPage /> : null}
           {tab === 'clipboard' ? <ClipboardPage /> : null}
-          {tab === 'providers' ? <PlannedPage messageKey="settings.providers.planned" /> : null}
+          {tab === 'providers' ? <ProvidersPage /> : null}
           {tab === 'prompt' ? <PlannedPage messageKey="settings.prompt.planned" /> : null}
           {tab === 'glossary' ? <PlannedPage messageKey="settings.glossary.planned" /> : null}
           {tab === 'shortcuts' ? <PlannedPage messageKey="settings.shortcuts.planned" /> : null}

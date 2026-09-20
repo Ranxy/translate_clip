@@ -6,11 +6,13 @@ Copy text anywhere; the translation appears in a small floating window.
 **Status:** phase 1 in progress.
 
 - Done: configuration layer, overlay/settings/wizard shells, tray, global shortcuts,
-  launch-at-login, lifecycle, icon pipeline, and the **clipboard pipeline** — polling
-  watcher with self-write suppression, filter chain, script-based language detection
-  and direction resolution, all wired through to the overlay.
-- Next: LLM provider profiles (sql.js + safeStorage), translation queue, history and
-  the provider settings page.
+  launch-at-login, lifecycle, icon pipeline, the clipboard pipeline (polling watcher,
+  filtering, script-based language detection, direction resolution) and **LLM
+  translation** — provider profiles in sql.js with `safeStorage` credentials, an
+  OpenAI-compatible client with retries and three-layer response parsing, a
+  latest-wins queue, history with a reuse cache, and the provider settings page.
+- Next: history panel UI, provider setup inside the first-run wizard, prompt and
+  glossary editors, the shortcuts page, Windows packaging.
 
 Primary target: **Windows**. Linux (X11/WSLg) is the development and verification
 environment; macOS support is planned but not implemented.
@@ -29,7 +31,7 @@ environment; macOS support is planned but not implemented.
 | `npm run build` | Builds `out/main`, `out/preload`, `out/renderer` |
 | `npm run typecheck` | `tsc --noEmit` across main, preload and renderer |
 | `npm test` | Unit tests (vitest) |
-| `npm run self-check` | Builds and runs an end-to-end smoke test of all three views |
+| `npm run self-check` | Builds and runs an end-to-end smoke test: shipped assets, writable `userData`, all three views, the clipboard pipeline and a real translation against a local stub provider |
 | `npm run icons` | Regenerates icons in `resources/` (dependency-free generator) |
 | `npm run dist:win` | Windows NSIS installer (`dist/`) |
 | `npm run dist:linux` | Linux AppImage + deb |
@@ -39,11 +41,16 @@ environment; macOS support is planned but not implemented.
 | Path | Contents |
 | --- | --- |
 | `<userData>/config.json` | All settings (see `src/shared/types.ts`) |
+| `<userData>/data.sqlite` | Provider profiles and translation history (sql.js) |
 | `<userData>/window-state.json` | Overlay and window geometry |
 | `<userData>/logs/main.log` | Main-process log, rotated at 2 MB |
 
 `userData` is `%APPDATA%\translate-clip` on Windows, `~/.config/translate-clip` on Linux.
 The settings window's **About** tab shows the exact path and can open it.
+
+`--self-check` temporarily saves a provider profile pointing at a loopback stub server,
+and deletes it — together with the sample translation — when it finishes. It never uses
+or modifies a real provider profile, and it does not start clipboard watching.
 
 ## Notes for development on WSL
 
