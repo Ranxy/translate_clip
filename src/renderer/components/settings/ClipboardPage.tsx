@@ -185,6 +185,16 @@ export function ClipboardPage() {
 
         <Divider />
 
+        <Field label={t('settings.clipboard.autoReplace')} hint={t('settings.clipboard.autoReplaceHint')}>
+          <Switch
+            label={t('settings.clipboard.autoReplace')}
+            checked={config.autoReplaceClipboard}
+            onChange={(checked) => void store.updateConfig({ autoReplaceClipboard: checked })}
+          />
+        </Field>
+
+        <Divider />
+
         <Field label={t('settings.clipboard.debugLog')} hint={t('settings.clipboard.debugLogHint')}>
           <Switch
             label={t('settings.clipboard.debugLog')}
