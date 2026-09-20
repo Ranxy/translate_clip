@@ -5,7 +5,22 @@ import { hashText } from '../utils/hash'
 export interface ClipboardAdapter {
   readText: () => string
   writeText: (text: string) => void
+  /**
+   * Formats currently on the clipboard.
+   *
+   * Copying a file in Explorer (or Nautilus/Finder) also puts the file's *path* on
+   * the clipboard as plain text, so a text-only watcher would translate
+   * "C:\Users\...\report.pdf" every time a file is copied. The format list is the
+   * only reliable way to tell that apart from someone copying a path on purpose.
+   */
+  readFormats?: () => string[]
 }
+
+export interface ClipboardContext {
+  hasFileList: boolean
+}
+
+const FILE_LIST_FORMAT_PATTERN = /hdrop|filename|copied-files|file-url/iu
 
 export interface ClipboardWatcherOptions {
   adapter: ClipboardAdapter
@@ -13,7 +28,7 @@ export interface ClipboardWatcherOptions {
   /** How long a value we wrote ourselves stays suppressed, in milliseconds. */
   selfWriteWindowMs?: number
   isEnabled: () => boolean
-  onCandidate: (text: string, source: ClipboardActivitySource) => void
+  onCandidate: (text: string, source: ClipboardActivitySource, context: ClipboardContext) => void
   onError?: (error: Error) => void
   now?: () => number
 }
@@ -137,7 +152,21 @@ export class ClipboardWatcher {
     }
 
     this.lastSignature = signature
-    this.options.onCandidate(text, source)
+    this.options.onCandidate(text, source, { hasFileList: this.detectFileList() })
+  }
+
+  private detectFileList(): boolean {
+    const readFormats = this.options.adapter.readFormats
+
+    if (!readFormats) {
+      return false
+    }
+
+    try {
+      return readFormats().some((format) => FILE_LIST_FORMAT_PATTERN.test(format))
+    } catch {
+      return false
+    }
   }
 
   private seedFromClipboard(): void {

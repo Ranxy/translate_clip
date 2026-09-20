@@ -30,7 +30,7 @@ import { createTranslator, type Translator } from './i18n'
 import { registerIpcRouter, type IpcHandler } from './ipc/ipcRouter'
 import { canManageLaunchAtLogin, getLaunchAtLogin, setLaunchAtLogin } from './services/autoLaunch'
 import { createCapabilityRegistry, type CapabilityRegistry } from './services/capabilityRegistry'
-import { ClipboardWatcher } from './services/clipboardWatcher'
+import { ClipboardWatcher, type ClipboardContext } from './services/clipboardWatcher'
 import { compileIgnorePatterns, filterClipboardText, type FilterContext } from './services/clipboardFilter'
 import { ConfigStore } from './services/configStore'
 import { createCredentialStore, type CredentialStore } from './services/credentialStore'
@@ -139,11 +139,12 @@ class TranslateClipApp {
     this.clipboardWatcher = new ClipboardWatcher({
       adapter: {
         readText: () => clipboard.readText(),
-        writeText: (text) => clipboard.writeText(text)
+        writeText: (text) => clipboard.writeText(text),
+        readFormats: () => clipboard.availableFormats()
       },
       pollIntervalMs: this.config.pollIntervalMs,
       isEnabled: () => this.config.clipboardWatchEnabled,
-      onCandidate: (text, source) => this.handleClipboardCandidate(text, source),
+      onCandidate: (text, source, context) => this.handleClipboardCandidate(text, source, context),
       onError: (error) => this.logger.warn('clipboard read failed', error)
     })
 
@@ -312,6 +313,11 @@ class TranslateClipApp {
       await setLaunchAtLogin(next.launchAtLogin, this.logger)
     }
 
+    if (next.historyLimit !== previous.historyLimit) {
+      // Lowering the limit should take effect now rather than after the next translation.
+      this.history.prune(next.historyLimit)
+    }
+
     this.windowManager.refreshWindowBackgroundColors()
     this.tray.refresh()
     this.windowManager.broadcast('config:update', next)
@@ -352,7 +358,27 @@ class TranslateClipApp {
    * decision can never be bypassed. Phase 2 inserts the translation queue between
    * the state update below and the broadcast.
    */
-  private handleClipboardCandidate(text: string, source: ClipboardActivitySource): void {
+  private handleClipboardCandidate(
+    text: string,
+    source: ClipboardActivitySource,
+    context: ClipboardContext = { hasFileList: false }
+  ): void {
+    // A file copy carries its path as text. Automatic watching skips it, but an
+    // explicit "translate clipboard now" does what it says.
+    if (context.hasFileList && source === 'watch') {
+      this.publishClipboardActivity({
+        at: new Date().toISOString(),
+        accepted: false,
+        reason: 'file-list',
+        charCount: text.length,
+        preview: null,
+        source
+      })
+
+      this.setTranslationState({ ...this.translationState, skipReason: 'file-list' })
+      return
+    }
+
     const result = filterClipboardText(text, this.getFilterContext(), this.lastAcceptedHash)
 
     if (!result.accepted) {
@@ -862,9 +888,12 @@ class TranslateClipApp {
    * example). The overlay is normally already visible, so the settings window is
    * what the user is actually asking for.
    */
-  focusPrimaryWindow(): void {
+  focusPrimaryWindow(options: { silent?: boolean } = {}): void {
     this.windowManager.showOverlay()
-    this.windowManager.openSettingsWindow()
+
+    if (!options.silent) {
+      this.windowManager.openSettingsWindow()
+    }
   }
 
   handleThemeUpdated(): void {
@@ -938,10 +967,19 @@ const translateClip = new TranslateClipApp()
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 
 if (!hasSingleInstanceLock) {
-  app.quit()
+  if (SELF_CHECK) {
+    // Otherwise the diagnostic would exit silently and look like it passed (or did
+    // nothing), while the running instance keeps holding the database.
+    process.stderr.write('\n[self-check] SKIPPED: another TranslateClip instance is running. Quit it and run again.\n')
+    app.exit(2)
+  } else {
+    app.quit()
+  }
 } else {
-  app.on('second-instance', () => {
-    translateClip.focusPrimaryWindow()
+  app.on('second-instance', (_event, argv) => {
+    // An autostart launch of a second instance must not pop the settings window at
+    // login; a user-initiated launch (clicking the icon again) should.
+    translateClip.focusPrimaryWindow({ silent: argv.includes('--hidden') })
   })
 
   app.whenReady().then(async () => {

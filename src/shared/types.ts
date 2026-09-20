@@ -199,6 +199,8 @@ export interface HistoryPage {
 
 export type ClipboardSkipReason =
   | 'disabled'
+  /** The clipboard holds a file list: copying a file in Explorer also puts its path in as text. */
+  | 'file-list'
   | 'empty'
   | 'too-short'
   | 'too-long'

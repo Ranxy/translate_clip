@@ -116,6 +116,12 @@ export class WindowManager {
 
     this.applyOverlayBehaviour(config)
 
+    if (config.overlay.collapsed) {
+      // Shrink before the first paint so a restart while collapsed looks the same as
+      // having collapsed it.
+      this.setOverlayCollapsed(true)
+    }
+
     void this.loadView(window, 'overlay').then(() => {
       if (this.overlay && !this.overlay.isDestroyed()) {
         this.showOverlay()
@@ -448,7 +454,7 @@ export class WindowManager {
         timer = null
       }
 
-      void this.options.windowStateStore.updateWindowState(kind, this.captureWindowState(window))
+      void this.options.windowStateStore.updateWindowState(kind, this.captureWindowState(window, kind))
     }
 
     const schedule = () => {
@@ -466,14 +472,24 @@ export class WindowManager {
     window.on('close', persistNow)
   }
 
-  private captureWindowState(window: BrowserWindow): { x?: number; y?: number; width: number; height: number; isMaximized: boolean } {
+  private captureWindowState(
+    window: BrowserWindow,
+    kind: WindowKind
+  ): { x?: number; y?: number; width: number; height: number; isMaximized: boolean } {
     const bounds = window.isMaximized() ? window.getNormalBounds() : window.getBounds()
+
+    // The collapsed height is an artefact of the collapsed bar, not a preference:
+    // persisting it would bring the overlay back as a tall empty bar next launch.
+    const height =
+      kind === 'overlay' && this.options.getConfig().overlay.collapsed && this.expandedOverlayBounds
+        ? this.expandedOverlayBounds.height
+        : bounds.height
 
     return {
       x: bounds.x,
       y: bounds.y,
       width: bounds.width,
-      height: bounds.height,
+      height,
       isMaximized: window.isMaximized()
     }
   }

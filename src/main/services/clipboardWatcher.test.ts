@@ -2,12 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ClipboardWatcher } from './clipboardWatcher'
 
-function createHarness(options: { initial?: string; failReads?: boolean; enabled?: boolean } = {}) {
+function createHarness(
+  options: { initial?: string; failReads?: boolean; enabled?: boolean; formats?: string[]; failFormatReads?: boolean } = {}
+) {
   let clipboardText = options.initial ?? ''
   let failReads = options.failReads ?? false
+  let failFormatReads = options.failFormatReads ?? false
   let enabled = options.enabled ?? true
+  let formats = options.formats ?? ['text/plain']
 
-  const emitted: Array<{ text: string; source: string }> = []
+  const emitted: Array<{ text: string; source: string; hasFileList: boolean }> = []
   const errors: Error[] = []
 
   const watcher = new ClipboardWatcher({
@@ -21,11 +25,18 @@ function createHarness(options: { initial?: string; failReads?: boolean; enabled
       },
       writeText: (text: string) => {
         clipboardText = text
+      },
+      readFormats: () => {
+        if (failFormatReads) {
+          throw new Error('formats unavailable')
+        }
+
+        return formats
       }
     },
     pollIntervalMs: 400,
     isEnabled: () => enabled,
-    onCandidate: (text, source) => emitted.push({ text, source }),
+    onCandidate: (text, source, context) => emitted.push({ text, source, hasFileList: context.hasFileList }),
     onError: (error) => errors.push(error)
   })
 
@@ -39,6 +50,9 @@ function createHarness(options: { initial?: string; failReads?: boolean; enabled
     getClipboard: () => clipboardText,
     setFailReads: (value: boolean) => {
       failReads = value
+    },
+    setFormats: (value: string[]) => {
+      formats = value
     },
     setEnabled: (value: boolean) => {
       enabled = value
@@ -67,7 +81,7 @@ describe('ClipboardWatcher', () => {
     harness.setClipboard('hello world')
     vi.advanceTimersByTime(2_000)
 
-    expect(harness.emitted).toEqual([{ text: 'hello world', source: 'watch' }])
+    expect(harness.emitted).toEqual([{ text: 'hello world', source: 'watch', hasFileList: false }])
   })
 
   it('does not re-emit identical content', () => {
@@ -127,9 +141,40 @@ describe('ClipboardWatcher', () => {
     harness.watcher.readNow()
 
     expect(harness.emitted).toEqual([
-      { text: 'already here', source: 'manual' },
-      { text: 'already here', source: 'manual' }
+      { text: 'already here', source: 'manual', hasFileList: false },
+      { text: 'already here', source: 'manual', hasFileList: false }
     ])
+  })
+
+  it('flags a clipboard that also holds a file list', () => {
+    const harness = createHarness({ formats: ['text/plain', 'CF_HDROP'] })
+
+    harness.watcher.start()
+    harness.setClipboard('C:\\Users\\ran\\report.pdf')
+    vi.advanceTimersByTime(1_000)
+
+    // Windows puts a copied file's path on the clipboard as text as well.
+    expect(harness.emitted).toEqual([{ text: 'C:\\Users\\ran\\report.pdf', source: 'watch', hasFileList: true }])
+  })
+
+  it('does not flag ordinary text', () => {
+    const harness = createHarness({ formats: ['text/plain', 'text/html'] })
+
+    harness.watcher.start()
+    harness.setClipboard('just some text')
+    vi.advanceTimersByTime(1_000)
+
+    expect(harness.emitted[0]?.hasFileList).toBe(false)
+  })
+
+  it('treats an unreadable format list as "no file list"', () => {
+    const harness = createHarness({ failFormatReads: true })
+
+    harness.watcher.start()
+    harness.setClipboard('still works')
+    vi.advanceTimersByTime(1_000)
+
+    expect(harness.emitted[0]).toMatchObject({ text: 'still works', hasFileList: false })
   })
 
   it('does not emit while watching is disabled', () => {

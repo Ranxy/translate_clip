@@ -84,6 +84,7 @@ export const zhCN = {
       'single-token': '单个词或数字',
       'ignored-pattern': '命中忽略规则',
       'same-as-last': '与上次内容相同',
+      'file-list': '复制的是文件而非文本',
       'self-write': '应用自身写入'
     }
   },

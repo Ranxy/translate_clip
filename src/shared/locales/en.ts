@@ -81,6 +81,7 @@ export const en: LocaleResource = {
       'single-token': 'single token',
       'ignored-pattern': 'matched an ignore rule',
       'same-as-last': 'same as before',
+      'file-list': 'a file was copied, not text',
       'self-write': 'written by the app itself'
     }
   },
