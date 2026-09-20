@@ -3,9 +3,14 @@
 Clipboard-monitoring LLM translator with an always-on-top overlay.
 Copy text anywhere; the translation appears in a small floating window.
 
-**Status:** phase 0 (skeleton) — the overlay, settings window, first-run wizard shell,
-configuration layer, tray, shortcuts and lifecycle are in place. Clipboard watching
-and translation land in phase 1.
+**Status:** phase 1 in progress.
+
+- Done: configuration layer, overlay/settings/wizard shells, tray, global shortcuts,
+  launch-at-login, lifecycle, icon pipeline, and the **clipboard pipeline** — polling
+  watcher with self-write suppression, filter chain, script-based language detection
+  and direction resolution, all wired through to the overlay.
+- Next: LLM provider profiles (sql.js + safeStorage), translation queue, history and
+  the provider settings page.
 
 Primary target: **Windows**. Linux (X11/WSLg) is the development and verification
 environment; macOS support is planned but not implemented.

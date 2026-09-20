@@ -43,7 +43,7 @@ export const en: LocaleResource = {
     listening: 'Watching',
     paused: 'Paused',
     clickThroughHint: 'Click-through is on: turn it off from the tray menu.',
-    phasePlanned: 'Skeleton is ready: clipboard watching and translation land in the next step.',
+    phasePlanned: 'Clipboard watching is live; LLM translation lands in the next step.',
     historyEmpty: 'No history yet',
     phase: {
       idle: 'Idle',

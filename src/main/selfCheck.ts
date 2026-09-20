@@ -36,6 +36,48 @@ const VIEWS: SelfCheckTarget[] = [
   { view: 'onboarding', label: 'onboarding view' }
 ]
 
+const PIPELINE_SAMPLE_TEXT = 'Hello clipboard pipeline'
+
+/**
+ * Drives the real clipboard pipeline (filter → language detection → direction →
+ * state broadcast → render) and asserts the overlay reflects it.
+ *
+ * Injection rather than a real copy keeps the check deterministic and, more
+ * importantly, keeps the self-check from reading the user's actual clipboard.
+ */
+async function checkClipboardPipeline(window: BrowserWindow, log: Logger): Promise<SelfCheckEntry> {
+  const name = 'clipboard pipeline'
+
+  try {
+    await window.webContents.executeJavaScript(
+      `window.translateClip.debugInjectClipboard(${JSON.stringify(PIPELINE_SAMPLE_TEXT)})`
+    )
+  } catch (error) {
+    return { name, ok: false, detail: `injection failed: ${(error as Error).message}` }
+  }
+
+  const deadline = Date.now() + 5_000
+  let bodyText = ''
+
+  for (;;) {
+    bodyText = await window.webContents.executeJavaScript('document.body.innerText')
+
+    const hasSource = bodyText.includes(PIPELINE_SAMPLE_TEXT)
+    const hasDirection = bodyText.toUpperCase().includes('ZH-CN')
+
+    if (hasSource && hasDirection) {
+      return { name, ok: true, detail: 'source text and resolved direction reached the overlay' }
+    }
+
+    if (Date.now() > deadline) {
+      log.warn(`self-check pipeline body text: ${bodyText.slice(0, 200)}`)
+      return { name, ok: false, detail: `overlay did not render the injected text (source=${hasSource}, direction=${hasDirection})` }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
 async function fileExists(path: string): Promise<boolean> {
   try {
     await access(path)
@@ -129,6 +171,11 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
         bridge === 'object' && root.children > 0,
         `preload bridge=${bridge}, mounted root children=${root.children}${root.children > 0 ? '' : `, root text: ${root.text}`}`
       )
+
+      if (target.view === 'overlay' && bridge === 'object' && root.children > 0) {
+        const pipeline = await checkClipboardPipeline(window, options.log)
+        push(pipeline.name, pipeline.ok, pipeline.detail)
+      }
     } catch (error) {
       push(target.label, false, (error as Error).message)
     } finally {

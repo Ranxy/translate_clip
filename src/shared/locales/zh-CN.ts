@@ -46,7 +46,7 @@ export const zhCN = {
     listening: '监听中',
     paused: '已暂停',
     clickThroughHint: '鼠标穿透已开启:请从托盘菜单关闭。',
-    phasePlanned: '第一期骨架已就绪:剪贴板监听与翻译将在下一步接入。',
+    phasePlanned: '剪贴板监听已经生效,LLM 翻译将在下一步接入。',
     historyEmpty: '暂无历史记录',
     phase: {
       idle: '空闲',

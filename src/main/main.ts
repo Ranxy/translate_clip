@@ -20,17 +20,22 @@ import type {
 
 import { createTranslator, type Translator } from './i18n'
 import { registerIpcRouter, type IpcHandler } from './ipc/ipcRouter'
+import { getLaunchAtLogin, setLaunchAtLogin } from './services/autoLaunch'
 import { createCapabilityRegistry, type CapabilityRegistry } from './services/capabilityRegistry'
+import { ClipboardWatcher } from './services/clipboardWatcher'
+import { compileIgnorePatterns, filterClipboardText, type FilterContext } from './services/clipboardFilter'
 import { ConfigStore } from './services/configStore'
 import { createCredentialStore, type CredentialStore } from './services/credentialStore'
-import { getLaunchAtLogin, setLaunchAtLogin } from './services/autoLaunch'
+import { detectLanguage, resolveDirection } from './services/languageDetector'
 import { createEmptyProviderState } from './services/llmProviderCatalog'
+import { buildSystemPrompt } from './services/promptBuilder'
 import { createLogger, type Logger } from './services/logStore'
 import { ShortcutManager } from './services/shortcutManager'
 import { TrayController } from './services/trayController'
 import { WindowManager } from './services/windowManager'
 import { WindowStateStore } from './services/windowStateStore'
 import { runSelfCheck, type SelfCheckReport } from './selfCheck'
+import { toPreview } from './utils/hash'
 import { getLogsPath, resolveResourcePath } from './utils/paths'
 
 /* ── Command line switches (must run before app is ready) ──────────── */
@@ -77,6 +82,7 @@ class TranslateClipApp {
   private readonly shortcutManager: ShortcutManager
   private readonly tray: TrayController
   private readonly credentialStore: CredentialStore
+  private readonly clipboardWatcher: ClipboardWatcher
 
   private config: AppConfig = structuredClone(DEFAULT_CONFIG)
   private translator: Translator
@@ -84,6 +90,8 @@ class TranslateClipApp {
   private clipboardLastActivityAt: string | null = null
   private clipboardAcceptedCount = 0
   private clipboardSkippedCount = 0
+  private ignorePatterns: RegExp[] = []
+  private lastAcceptedHash: string | null = null
   private quitting = false
 
   constructor() {
@@ -95,6 +103,17 @@ class TranslateClipApp {
     this.capabilities = createCapabilityRegistry(this.logger)
     this.credentialStore = createCredentialStore(this.logger)
     this.translator = createTranslator(null)
+
+    this.clipboardWatcher = new ClipboardWatcher({
+      adapter: {
+        readText: () => clipboard.readText(),
+        writeText: (text) => clipboard.writeText(text)
+      },
+      pollIntervalMs: this.config.pollIntervalMs,
+      isEnabled: () => this.config.clipboardWatchEnabled,
+      onCandidate: (text, source) => this.handleClipboardCandidate(text, source),
+      onError: (error) => this.logger.warn('clipboard read failed', error)
+    })
 
     this.windowManager = new WindowManager({
       preloadPath: this.preloadPath,
@@ -178,6 +197,22 @@ class TranslateClipApp {
     const trayCreated = this.tray.create(trayIconPath)
     this.capabilities.setTrayAvailable(trayCreated)
     this.logger.info(trayCreated ? 'system tray ready' : 'running without a system tray')
+
+    this.ignorePatterns = compileIgnorePatterns(this.config.ignorePatterns)
+
+    if (SELF_CHECK) {
+      // A diagnostic run must not read (and therefore never send) whatever the
+      // user happens to have on their clipboard.
+      this.logger.info('self-check mode: clipboard watching is not started')
+      return
+    }
+
+    this.clipboardWatcher.applyPollInterval(this.config.pollIntervalMs)
+    this.clipboardWatcher.start()
+    this.logger.info('clipboard watcher started', {
+      pollIntervalMs: this.config.pollIntervalMs,
+      enabled: this.config.clipboardWatchEnabled
+    })
   }
 
   createWindows(): void {
@@ -215,6 +250,22 @@ class TranslateClipApp {
     }
 
     this.windowManager.applyOverlayBehaviour(next)
+
+    if (next.ignorePatterns !== previous.ignorePatterns) {
+      this.ignorePatterns = compileIgnorePatterns(next.ignorePatterns)
+    }
+
+    if (next.pollIntervalMs !== previous.pollIntervalMs) {
+      this.clipboardWatcher.applyPollInterval(next.pollIntervalMs)
+    }
+
+    if (next.clipboardWatchEnabled !== previous.clipboardWatchEnabled) {
+      // Restarting re-seeds whatever is currently on the clipboard, so resuming
+      // never fires a translation for something copied while watching was paused.
+      this.clipboardWatcher.stop()
+      this.clipboardWatcher.start()
+      this.logger.info(`clipboard watching ${next.clipboardWatchEnabled ? 'resumed' : 'paused'}`)
+    }
 
     if (next.overlay.collapsed !== previous.overlay.collapsed) {
       this.windowManager.setOverlayCollapsed(next.overlay.collapsed)
@@ -261,33 +312,93 @@ class TranslateClipApp {
   /**
    * Single entry point for "some text showed up".
    *
-   * Phase 1 inserts the filter chain, language detection and the translation
-   * queue between this method and the activity broadcast; the seam exists now so
-   * the debug injector exercises exactly the production path.
+   * Every path — the watcher, the tray entry, the overlay button and the debug
+   * injector — funnels through here, so the filter chain and the direction
+   * decision can never be bypassed. Phase 2 inserts the translation queue between
+   * the state update below and the broadcast.
    */
   private handleClipboardCandidate(text: string, source: ClipboardActivitySource): void {
-    const normalized = text.replace(/\r\n/gu, '\n').trim()
+    const result = filterClipboardText(text, this.getFilterContext(), this.lastAcceptedHash)
 
-    if (normalized.length === 0) {
+    if (!result.accepted) {
       this.publishClipboardActivity({
         at: new Date().toISOString(),
         accepted: false,
-        reason: 'empty',
-        charCount: 0,
+        reason: result.reason,
+        charCount: result.charCount,
         preview: null,
         source
       })
+
+      this.setTranslationState({ ...this.translationState, skipReason: result.reason })
       return
     }
 
+    this.lastAcceptedHash = result.hash
     this.publishClipboardActivity({
       at: new Date().toISOString(),
       accepted: true,
       reason: null,
-      charCount: normalized.length,
-      preview: normalized.slice(0, 160),
+      charCount: result.text.length,
+      preview: toPreview(result.text),
       source
     })
+
+    const activeProfile = this.getActiveProfile()
+    const detection = detectLanguage(result.text)
+    const direction = resolveDirection(detection, {
+      directionMode: this.config.directionMode,
+      targetLanguage: this.config.targetLanguage,
+      fallbackLanguage: this.config.fallbackLanguage
+    })
+
+    this.logger.debug('clipboard candidate accepted', {
+      chars: result.text.length,
+      detected: detection.language,
+      script: detection.script,
+      confidence: Number(detection.confidence.toFixed(2)),
+      direction
+    })
+
+    this.setTranslationState({
+      phase: activeProfile ? 'idle' : 'unconfigured',
+      sourceText: result.text,
+      translatedText: null,
+      direction,
+      providerId: activeProfile?.providerId ?? null,
+      modelName: activeProfile?.modelName ?? null,
+      historyId: null,
+      error: null,
+      skipReason: null,
+      latencyMs: null,
+      cached: false
+    })
+
+    if (this.config.llmDebugEnabled) {
+      this.logger.info('translation request prepared', {
+        direction,
+        systemPrompt: buildSystemPrompt(this.config, direction, result.text)
+      })
+    }
+  }
+
+  private setTranslationState(next: TranslationState): void {
+    this.translationState = next
+    this.windowManager.broadcast('translation:state', next)
+  }
+
+  private getFilterContext(): FilterContext {
+    return {
+      minSourceChars: this.config.minSourceChars,
+      maxSourceChars: this.config.maxSourceChars,
+      skipSingleToken: this.config.skipSingleToken,
+      ignorePatterns: this.ignorePatterns
+    }
+  }
+
+  private getActiveProfile(): LlmProviderState['profiles'][number] | null {
+    const state = this.buildProviderState()
+    return state.profiles.find((profile) => profile.profileId === state.activeProfileId) ?? null
   }
 
   private publishClipboardActivity(activity: ClipboardActivity): void {
@@ -313,7 +424,7 @@ class TranslateClipApp {
   }
 
   translateClipboardNow(): void {
-    this.handleClipboardCandidate(clipboard.readText(), 'manual')
+    this.clipboardWatcher.readNow('manual')
   }
 
   /* ── Snapshots ───────────────────────────────────────────────────── */
@@ -378,7 +489,9 @@ class TranslateClipApp {
       'app:cancelTranslation': notImplemented('Cancelling a translation'),
 
       'clipboard:writeText': (text: string) => {
-        clipboard.writeText(text)
+        // Goes through the watcher so the app's own write is suppressed instead of
+        // being picked up as a fresh copy.
+        this.clipboardWatcher.writeText(text)
       },
 
       'history:list': notImplemented('Translation history') as unknown as (
@@ -545,6 +658,7 @@ class TranslateClipApp {
 
   handleBeforeQuit(): void {
     this.quitting = true
+    this.clipboardWatcher.stop()
     this.shortcutManager.dispose()
     this.tray.destroy()
   }

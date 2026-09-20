@@ -323,9 +323,19 @@ export class WindowManager {
 
   /* ── Shared plumbing ─────────────────────────────────────────────── */
 
+  /**
+   * Pushes an event to every renderer.
+   *
+   * Deliberately `BrowserWindow.getAllWindows()` rather than the three windows this
+   * class owns: any window that loads our renderer is a legitimate consumer, and
+   * keeping a private registry here would silently starve windows created
+   * elsewhere (diagnostics, future views).
+   */
   broadcast<K extends keyof RendererEventMap>(channel: K, payload: RendererEventMap[K]): void {
-    for (const window of this.getAllWindows()) {
-      window.webContents.send(channel, payload)
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send(channel, payload)
+      }
     }
   }
 

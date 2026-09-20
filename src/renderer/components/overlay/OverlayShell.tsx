@@ -19,9 +19,11 @@ function DirectionLabel() {
     return null
   }
 
+  const source = direction.sourceLanguage === 'latin' || direction.sourceLanguage === 'unknown' ? 'AUTO' : direction.sourceLanguage
+
   return (
     <span className="font-mono text-[10px] uppercase tracking-wide text-faint">
-      {direction.sourceLanguage} → {direction.targetLanguage}
+      {source} → {direction.targetLanguage}
     </span>
   )
 }
@@ -29,22 +31,11 @@ function DirectionLabel() {
 function CurrentPanel() {
   const { t } = useTranslation()
   const store = useAppStore()
-  const { translationState, bootstrap } = useAppState()
+  const { translationState } = useAppState()
   const configured = store.isProviderConfigured
+  const hasSource = Boolean(translationState.sourceText)
 
-  if (!configured) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-[13px] font-medium text-text">{t('overlay.providerMissing')}</p>
-        <Button variant="primary" size="sm" onClick={() => void window.translateClip.openSettings()}>
-          {t('overlay.providerMissingAction')}
-        </Button>
-        <p className="text-[11.5px] leading-relaxed text-faint">{t('overlay.phasePlanned')}</p>
-      </div>
-    )
-  }
-
-  if (translationState.phase === 'idle' && !translationState.sourceText) {
+  if (!hasSource && translationState.phase === 'idle') {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
         <p className="text-[13px] font-medium text-text">{t('overlay.emptyTitle')}</p>
@@ -52,25 +43,13 @@ function CurrentPanel() {
         <Button size="sm" className="mt-1" onClick={() => void window.translateClip.translateClipboardNow()}>
           {t('overlay.actionTranslateNow')}
         </Button>
-        {bootstrap.pendingOnboarding ? <p className="text-[11px] text-faint">{t('overlay.phasePlanned')}</p> : null}
-      </div>
-    )
-  }
-
-  if (translationState.phase === 'error') {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-        <p className="text-[13px] font-medium text-danger">{translationState.error?.message ?? t('overlay.phase.error')}</p>
-        <Button size="sm" onClick={() => void window.translateClip.retranslateLast()}>
-          {t('common.retry')}
-        </Button>
       </div>
     )
   }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-3">
-      {translationState.sourceText ? (
+      {hasSource ? (
         <section>
           <header className="mb-1 flex items-center justify-between">
             <span className="text-[10.5px] uppercase tracking-wide text-faint">{t('overlay.sourceLabel')}</span>
@@ -88,13 +67,29 @@ function CurrentPanel() {
           {translationState.cached ? <Badge tone="accent">{t('common.saved')}</Badge> : null}
         </header>
 
-        {translationState.phase === 'translating' ? (
+        {!configured ? (
+          <div className="flex flex-col items-start gap-2 pt-0.5">
+            <p className="text-[12.5px] text-warn">{t('overlay.providerMissing')}</p>
+            <Button variant="primary" size="sm" onClick={() => void window.translateClip.openSettings()}>
+              {t('overlay.providerMissingAction')}
+            </Button>
+          </div>
+        ) : translationState.phase === 'translating' ? (
           <div className="flex flex-col gap-2 pt-1">
             <span className="h-3 w-4/5 animate-pulse rounded bg-surface-hover" />
             <span className="h-3 w-3/5 animate-pulse rounded bg-surface-hover" />
           </div>
-        ) : (
+        ) : translationState.phase === 'error' ? (
+          <div className="flex flex-col items-start gap-2">
+            <p className="text-[12.5px] text-danger">{translationState.error?.message ?? t('overlay.phase.error')}</p>
+            <Button size="sm" onClick={() => void window.translateClip.retranslateLast()}>
+              {t('common.retry')}
+            </Button>
+          </div>
+        ) : translationState.translatedText ? (
           <p className="selectable whitespace-pre-wrap text-[14px] leading-relaxed text-text">{translationState.translatedText}</p>
+        ) : (
+          <p className="text-[12px] leading-relaxed text-faint">{t('overlay.emptyBody')}</p>
         )}
       </section>
     </div>
