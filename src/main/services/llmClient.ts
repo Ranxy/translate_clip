@@ -213,8 +213,18 @@ async function attemptTranslation(options: TranslationRequestOptions, attempt: n
     throw toRequestError(error, options, timeoutSignal, url)
   }
 
+  let bodyText: string
+
+  try {
+    // The timeout covers the body as well: a provider can accept the request, send
+    // headers and then hang, which is exactly what a stalled gateway looks like.
+    bodyText = await response.text()
+  } catch (error) {
+    throw toRequestError(error, options, timeoutSignal, url)
+  }
+
+  // Measured after the body, so the reported latency is the whole round trip.
   const latencyMs = Date.now() - startedAt
-  const bodyText = await response.text()
 
   if (!response.ok) {
     throw classifyHttpError(response.status, bodyText)

@@ -76,9 +76,10 @@ launch-at-login switch is disabled in development runs (it needs an installed bu
 The settings window's **About** tab shows the exact path and can open it.
 
 `--self-check` temporarily saves a provider profile pointing at a loopback stub server,
-deletes it (with the sample translation) when it finishes, and walks the first-run
-wizard — which re-saves the direction settings unchanged. It never uses or modifies a
-real provider profile, and it does not start clipboard watching.
+deletes it (with the sample translation) when it finishes, walks the first-run wizard
+(which re-saves the direction settings unchanged) and briefly sets the overlay text
+size to its maximum to measure the layout before restoring it. It never uses or modifies
+a real provider profile, and it does not start clipboard watching.
 
 ## Notes for development on WSL
 

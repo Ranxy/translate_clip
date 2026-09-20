@@ -7,6 +7,8 @@ export interface StubResponse {
   /** Send this verbatim instead of serialising `body`. */
   rawBody?: string
   delayMs?: number
+  /** Send the status line and headers, then never finish the body. */
+  stall?: boolean
 }
 
 export interface StubRequest {
@@ -62,6 +64,16 @@ export async function startStubServer(initial: StubResponse = {}): Promise<StubS
       const next = queue.length > 1 ? (queue.shift() as StubResponse) : (queue[0] ?? {})
       const send = () => {
         if (response.writableEnded || response.destroyed) {
+          return
+        }
+
+        if (next.stall) {
+          // Accepts the request, then hangs. `writeHead` alone only sets state — the
+          // headers are not on the wire until something is written. Without flushing
+          // them the client would still be waiting on `fetch` instead of on the body,
+          // which is a different code path and would make this stub test nothing.
+          response.writeHead(next.status ?? 200, { 'Content-Type': 'application/json' })
+          response.flushHeaders()
           return
         }
 

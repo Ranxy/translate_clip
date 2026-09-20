@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useAppState, useAppStore } from '../../store/appStore'
@@ -113,16 +113,38 @@ function overlayZoom(fontSize: number): number {
   return fontSize / BASE_FONT_SIZE
 }
 
+/**
+ * Style for the zoomed overlay box.
+ *
+ * `zoom` multiplies length values, so an `h-screen`/`w-screen` box would render
+ * `zoom` times taller and wider than the window and cut the status bar off the
+ * bottom. Dividing the dimensions by the zoom keeps the physical size exactly the
+ * viewport while everything inside still scales.
+ */
+function overlayFrameStyle(fontSize: number): CSSProperties {
+  const zoom = overlayZoom(fontSize)
+
+  if (zoom === 1) {
+    return { zoom: 1, width: '100vw', height: '100vh' }
+  }
+
+  return {
+    zoom,
+    width: `calc(100vw / ${zoom})`,
+    height: `calc(100vh / ${zoom})`
+  }
+}
+
 function CollapsedBar() {
   const { t } = useTranslation()
   const store = useAppStore()
   const { translationState, bootstrap } = useAppState()
-  const zoom = overlayZoom(bootstrap.config.overlay.fontSize)
+  const frameStyle = overlayFrameStyle(bootstrap.config.overlay.fontSize)
 
   const preview = translationState.translatedText ?? translationState.sourceText ?? t('overlay.emptyTitle')
 
   return (
-    <div className="h-screen w-screen p-2" style={{ zoom }}>
+    <div className="p-2" style={frameStyle}>
       <div
         className="flex h-full items-center gap-2 rounded-xl border border-border bg-surface px-3 backdrop-blur-2xl"
         style={dragRegion}
@@ -152,7 +174,7 @@ export function OverlayShell() {
   const { config, capabilities } = state.bootstrap
   const { translationState, clipboardStatus } = state
   const opaque = config.overlay.opaque
-  const zoom = overlayZoom(config.overlay.fontSize)
+  const frameStyle = overlayFrameStyle(config.overlay.fontSize)
 
   if (config.overlay.collapsed) {
     return <CollapsedBar />
@@ -169,8 +191,9 @@ export function OverlayShell() {
   const canCopy = Boolean(translationState.translatedText)
 
   return (
-    <div className="h-screen w-screen p-2" style={{ zoom }}>
+    <div className="p-2" style={frameStyle}>
       <div
+        data-overlay-card
         className={cn(
           'flex h-full flex-col overflow-hidden rounded-xl border border-border',
           opaque ? 'bg-surface-opaque' : 'bg-surface backdrop-blur-2xl'

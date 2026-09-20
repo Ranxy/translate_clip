@@ -121,6 +121,81 @@ interface BootstrapShape {
   llmProviderState?: { profiles?: Array<{ profileId: string }>; activeProfileId?: string | null }
 }
 
+/**
+ * Measures the overlay at the largest configured text size.
+ *
+ * The text size is applied as a root `zoom`, which multiplies length values — so the
+ * `h-screen`/`w-screen` container would render taller and wider than the window and
+ * push the status bar out of view. Only a measurement catches that.
+ */
+async function checkOverlayScaling(window: BrowserWindow, log: Logger): Promise<SelfCheckEntry> {
+  const name = 'overlay scaling'
+
+  const readMetrics = `(() => {
+    const footer = document.querySelector('footer')
+    const card = document.querySelector('[data-overlay-card]')
+    return {
+      innerHeight: window.innerHeight,
+      innerWidth: window.innerWidth,
+      bodyScrollHeight: document.body.scrollHeight,
+      bodyScrollWidth: document.body.scrollWidth,
+      footerBottom: footer ? Math.round(footer.getBoundingClientRect().bottom) : -1,
+      cardRight: card ? Math.round(card.getBoundingClientRect().right) : -1
+    }
+  })()`
+
+  let original: Record<string, unknown> | null = null
+
+  try {
+    const bootstrap = (await window.webContents.executeJavaScript('window.translateClip.getBootstrapData()')) as {
+      config?: { overlay?: Record<string, unknown> }
+    }
+    original = bootstrap.config?.overlay ?? null
+
+    if (!original) {
+      return { name, ok: false, detail: 'the bootstrap payload had no overlay config' }
+    }
+
+    await window.webContents.executeJavaScript(
+      `window.translateClip.updateConfig({ overlay: ${JSON.stringify({ ...original, fontSize: 20 })} })`
+    )
+    await new Promise((resolve) => setTimeout(resolve, 300))
+
+    const metrics = (await window.webContents.executeJavaScript(readMetrics)) as {
+      innerHeight: number
+      innerWidth: number
+      bodyScrollHeight: number
+      bodyScrollWidth: number
+      footerBottom: number
+      cardRight: number
+    }
+
+    const fitsVertically = metrics.footerBottom > 0 && metrics.footerBottom <= metrics.innerHeight + 1
+    const fitsHorizontally = metrics.cardRight > 0 && metrics.cardRight <= metrics.innerWidth + 1
+    const noOverflow =
+      metrics.bodyScrollHeight <= metrics.innerHeight + 1 && metrics.bodyScrollWidth <= metrics.innerWidth + 1
+
+    return {
+      name,
+      ok: fitsVertically && fitsHorizontally && noOverflow,
+      detail: `at fontSize 20: footer bottom ${metrics.footerBottom}/${metrics.innerHeight}, card right ${metrics.cardRight}/${metrics.innerWidth}, content ${metrics.bodyScrollWidth}x${metrics.bodyScrollHeight}`
+    }
+  } catch (error) {
+    return { name, ok: false, detail: (error as Error).message }
+  } finally {
+    if (original) {
+      try {
+        // Restores the values captured before the check, not whatever is current now.
+        await window.webContents.executeJavaScript(
+          `window.translateClip.updateConfig({ overlay: ${JSON.stringify(original)} })`
+        )
+      } catch (error) {
+        log.warn('self-check could not restore the overlay config', error)
+      }
+    }
+  }
+}
+
 /** Switches the overlay to its history tab and reports how many entries rendered. */
 async function countHistoryItems(window: BrowserWindow): Promise<number> {
   await window.webContents.executeJavaScript(
@@ -465,6 +540,9 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
 
         const translation = await checkTranslationFlow(window, options.log)
         push(translation.name, translation.ok, translation.detail)
+
+        const scaling = await checkOverlayScaling(window, options.log)
+        push(scaling.name, scaling.ok, scaling.detail)
       }
 
       if (target.view === 'settings' && bridge === 'object' && root.children > 0) {

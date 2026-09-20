@@ -171,6 +171,12 @@ describe('requestTranslation', () => {
     await expect(requestTranslation(baseRequest(server, { timeoutMs: 60 }))).rejects.toMatchObject({ code: 'timeout' })
   })
 
+  it('reports a timeout when the body stalls after the headers', async () => {
+    const server = await createServer({ status: 200, stall: true })
+
+    await expect(requestTranslation(baseRequest(server, { timeoutMs: 80 }))).rejects.toMatchObject({ code: 'timeout' })
+  })
+
   it('reports cancellation distinctly from a timeout', async () => {
     const server = await createServer({ ...chatResponse('{"translatedText":"never"}'), delayMs: 600 })
     const controller = new AbortController()
