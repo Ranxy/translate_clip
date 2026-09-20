@@ -2,7 +2,8 @@
 
 > 剪贴板监听 → LLM 翻译 → 常驻置顶浮层
 > 第一期交付平台:**Windows + Linux**;架构预留 macOS(第三期)
-> 开发环境:WSL2 (Arch) + WSLg;Windows 侧由用户自行验证
+> 开发环境:Windows 11 + PowerShell 7(2560×1440 @150% 缩放,Electron 视口 1707×960 DIP);
+> Linux 是交付目标而不是开发环境,由 Linux CI 出包验证
 
 ---
 
@@ -29,6 +30,10 @@
 | 平台能力 | 未提及 | `capabilityRegistry` 上报 `tray` / `globalShortcut` / `keyring` / `launchAtLogin`(开发模式下自启不可用会置灰) |
 | 打包细节 | 一份 `extraResources: resources → resources` | 逐目录映射,否则打包后在 `<resources>/resources/...` 而代码找 `<resources>/icons/...`(托盘图标会空白) |
 | 图标 | 计划产出 PNG + 手写 ICO | **只有 PNG**:ICO 在 Linux 上无法用 `nativeImage` 校验,而 `win.icon` 指向的 PNG 会由 electron-builder 转换为 ICO |
+| 折叠态几何 | 固定 76 DIP 的单行条 | 折叠条**按内容自适应高度**:默认一行,预览换行时最多 6 行,折叠态不套用窗口最小高度;预览一旦折行,右侧控件(暂停 / 清空 / 展开)由横排改为竖排,把宽度让给文字 |
+| 自动替换剪贴板 | 未提及 | `autoReplaceClipboard`(默认**关**):每段完成的译文自动写回剪贴板,替换用户复制的内容;浮层状态条图标与 设置 → 剪贴板 是**同一个开关**,任一侧切换即时同步,自写抑制保证不会把译文再翻一遍 |
+| 清空当前 | 未提及 | 浮层动作区的「清空」一次性清空原文 + 译文并回到空态,同时取消在途请求;无内容时置灰 |
+| 监听开关 | 只有托盘「暂停监听」 | 浮层三处可切:头部「监听中 / 已暂停」徽标、状态条右侧的「暂停 / 恢复」动作、折叠条上的图标(折叠态的唯一入口) |
 
 **未实现**:`streamEnabled`(配置项保留但未接)、macOS 适配、Wayland 原生剪贴板、
 OCR / 划词取词。Windows 侧的人工验证清单见 [`WINDOWS-VERIFICATION.md`](WINDOWS-VERIFICATION.md)。
@@ -57,7 +62,7 @@ OCR / 划词取词。Windows 侧的人工验证清单见 [`WINDOWS-VERIFICATION.
 > 2. **浮层内按钮**——空态给出「立即翻译剪贴板」,完成态给出「重译」;
 > 3. **托盘菜单**——「显隐浮层 / 立即翻译剪贴板 / 暂停监听」。
 >
-> 另外,鼠标穿透(`clickThrough`)开启后浮层不可点,只能靠托盘关闭 —— 所以托盘不可用的环境(WSLg)下**默认不自动开启穿透**,并且开启穿越时必须发一次系统通知告知关闭方式。
+> 另外,鼠标穿透(`clickThrough`)开启后浮层不可点,只能靠托盘关闭 —— 所以托盘不可用的环境(个别没有托盘宿主的 Linux 桌面)下**默认不自动开启穿透**,并且开启穿越时必须发一次系统通知告知关闭方式。
 
 ---
 
@@ -88,7 +93,7 @@ OCR / 划词取词。Windows 侧的人工验证清单见 [`WINDOWS-VERIFICATION.
 - **首次运行**:弹出引导向导,让用户配置翻译方向(必做)、Provider(可跳过)、系统集成项。
 - **历史上限 / 缓存**:500 条 / 24h。
 - **CI**:附加 GitHub Actions workflow,在 `windows-latest` 出 Windows 包(本地 `dist:win` 同样保留)。
-- **构建**:Linux 侧我负责开发验证,Windows 安装包你在 Windows 上自行验证(因此不以 wine 交叉构建为前提,提供 `dist:win` 脚本)。
+- **构建**:开发与验证都在本机 Windows 上进行(`npm run dev` / `npm run dist:win`);Linux 是交付目标,由 Linux CI 出 AppImage / deb(因此不以 wine 交叉构建为前提)。
 
 ### 1.3 非目标(一期不做)
 
@@ -294,7 +299,7 @@ class ClipboardWatcher {
 
 - 轮询间隔由配置控制(200–2000ms,默认 400ms)。间隔越短延迟越低、越耗电;文档给出默认即够用。
 - 图片/文件/HTML 一律**忽略**(只 `readText()`),不做富文本处理。
-- **Wayland 原生**:部分合成器只允许聚焦的客户端读剪贴板 → 浮层失焦时可能读不到。一期以 X11/XWayland 为准(WSLg 走的正是这条),文档明示;二期再评估 `wl-paste` 辅助进程。
+- **Wayland 原生(Linux 产品侧)**:部分合成器只允许聚焦的客户端读剪贴板 → 浮层失焦时可能读不到。Linux 一期以 X11/XWayland 为准,文档明示;二期再评估 `wl-paste` 辅助进程。Windows 走主进程 `readText()`,无此限制。
 - **Linux 空选择**:X11 下剪贴板所有者退出后 `readText()` 可能返回空 → 空串直接跳过,不清空 `lastSig`。
 - 应用自身退出/暂停时不写回,不影响系统剪贴板。
 
@@ -571,7 +576,7 @@ interface AppConfig {
 - 菜单:显隐浮层 / 暂停监听(勾选) / 翻译当前剪贴板 / 折叠浮层(勾选) / 鼠标穿透(勾选) / 打开设置 / 打开数据目录 / 开机自启(勾选) / 关于 / 退出。
 - 左键单击 → 显隐浮层;双击 → 打开设置。
 - 图标:`process.platform === 'win32' ? tray.ico : tray.png`;mac 用 `trayTemplate.png`(第三期)。
-- **必须 `try/catch`**:WSLg 无 StatusNotifier host,`new Tray()` 可能抛错或无图标 → 捕获后降级为"无托盘模式"(浮层+快捷键仍可用),并在设置页提示。这是 WSL 开发期的现实情况,不能让它阻塞启动。
+- **必须 `try/catch`**:个别 Linux 桌面没有 StatusNotifier host,`new Tray()` 可能抛错或无图标 → 捕获后降级为"无托盘模式"(浮层+快捷键仍可用),并在设置页提示。这是 Linux 产品侧的兼容分支;Windows(开发与主目标平台)上托盘已实测可用(`tray: true`)。不能让它阻塞启动。
 - `closeToTray` 开启时,浮层的 ✕ 是"隐藏"而非销毁;真正退出只走托盘"退出"/`app.quit()`;`window-all-closed` 在 win/linux 下**不**退出(因为浮层可能只是隐藏了)。
 
 **快捷键**
@@ -580,7 +585,7 @@ interface AppConfig {
 - 设置页的按键录制输入:捕获 `keydown` → 组装 accelerator → 调用 `shortcut:test` 做一次试注册校验。
 - **默认两项都是 `null`**:启动时**不注册**任何全局加速键(你已确认)。用户录制成功后即时 `register`,录制为空则 `unregister`。
 - 无快捷键时的等价入口:托盘「显隐浮层 / 立即翻译剪贴板」+ 浮层内按钮(§6.1 空态)。两者必须始终可用,这是默认配置下的唯一触发面。
-- **Wayland/WSLg 限制**:Linux 上 `globalShortcut` 依赖 X11;WSLg 下仅对 WSL 内 X 应用生效,对 Windows 宿主应用无效 —— 一期以 Windows 为主战场,Linux 用户可退回"点浮层按钮/托盘菜单"触发。文档明示。
+- **Wayland 限制(Linux 产品侧)**:Linux 上 `globalShortcut` 依赖 X11,原生 Wayland 会话下可能注册失败 —— Linux 用户可退回"点浮层按钮/托盘菜单"触发。Windows 上为 `full`,切到别的程序后仍然生效。文档明示。
 
 **开机自启**
 
@@ -781,7 +786,7 @@ linux:
 
 ```json
 "dev": "electron-vite dev",
-"dev:gpu-off": "TRANSLATE_CLIP_DISABLE_GPU=1 electron-vite dev",
+"dev:gpu-off": "node scripts/dev-gpu-off.mjs",
 "build": "electron-vite build",
 "typecheck": "tsc --noEmit",
 "test": "vitest run",
@@ -791,58 +796,62 @@ linux:
 "dist:linux": "npm run build && electron-builder --linux AppImage deb"
 ```
 
-- Windows 包在你本机 `npm run dist:win` 产出(我不在 Linux 上做 wine 交叉构建);同时按你确认的意见附带 CI 出包。
+- Windows 包在本机 `npm run dist:win` 产出;Linux 包由 Linux CI 产出(AppImage / deb),不做 wine 交叉构建 —— 同时按你确认的意见附带 Windows CI 出包。
 - **`.github/workflows/build-windows.yml`(已确认要做)** —— 复刻 eve-babel 模板:`windows-latest` + `npm ci` + `node node_modules/electron/install.js`(确保 Electron 二进制)+ `typecheck` + `test` + `npm run dist:win` + `upload-artifact`。触发条件:`workflow_dispatch` / push `main` / push tag `v*` / PR 到 `main`。
-- 另加 `.github/workflows/build-linux.yml`(ubuntu-latest,`dist:linux`,顺手在 CI 上验证 Linux 侧 `typecheck + test`,这两步在 WSL 本地也会跑,CI 只是双保险)。
+- 另加 `.github/workflows/build-linux.yml`(ubuntu-latest,`dist:linux`,顺手在 CI 上验证 Linux 侧 `typecheck + test` —— 这两步的 **Linux 验证只在 CI 上跑**,本机 Windows 跑的是同一套 `typecheck` / `test`)。
 - `.gitignore`:`node_modules`、`out`、`dist`、`*.log`、`docs/spec`(如后续加 spec)。
 
 ---
 
-## 10. WSL 开发与测试策略
+## 10. Windows 开发与测试策略
 
 ### 10.1 环境事实(已探测)
 
 | 项 | 结果 |
 | --- | --- |
-| WSL 发行版 | Arch,WSL2,`6.18` 内核 |
-| GUI | ✅ WSLg(`/mnt/wslg`、`DISPLAY=:0`、`WAYLAND_DISPLAY=wayland-0`、PulseServer) |
-| Node / npm / pnpm | v24.12.0 / 11.6.2 / 11.10.0 |
-| wine | ❌ 未安装(故不在 WSL 交叉构建 Windows 包) |
-| xclip / wl-clipboard | ❌ 未安装(我们用 Electron 自带 `clipboard`,不需要) |
-| docker | ✅ 可用(备用:容器内跑 Linux 发行验证) |
+| 开发环境 | Windows 11 + PowerShell 7 |
+| 显示 | 2560×1440 @150% 缩放 → Electron 视口 1707×960 DIP |
+| Node / npm | v24.15.0 / 11.12.1 |
+| 平台能力 | ✅ `tray: true`、`globalShortcut: "full"`、`keyring: true`(Windows 走 DPAPI) |
+| 开机自启 | 开发运行下不可用 —— **设计如此**,只有安装版才写系统启动项(见 §5.10) |
+| GPU 兜底 | `npm run dev:gpu-off`(跨平台脚本,置 `TRANSLATE_CLIP_DISABLE_GPU=1` → `disable-gpu`) |
+| Linux | 仍是交付目标(AppImage + deb,Linux CI 出包并跑 `typecheck + test`),只是不再是开发环境 |
+| 打包 | Windows 包本机 `npm run dist:win` 产出;不做 wine 交叉构建 |
 
-### 10.2 在 WSLg 里怎么跑、怎么验
+### 10.2 在本机上怎么跑、怎么验
 
-1. `npm install && npm run dev` → electron-vite 起 dev server,Electron 窗口经 WSLg 显示在 Windows 桌面上。
-2. 如遇 GPU/渲染异常:`npm run dev:gpu-off`(即 `TRANSLATE_CLIP_DISABLE_GPU=1`,代码里 `app.commandLine.appendSwitch('disable-gpu')`)。
-3. 若以 root 运行报 sandbox 错(本机用户是 `ran`,预计不会):主进程在 Linux 下检测到 `process.getuid?.() === 0` 时追加 `--no-sandbox` 并打印警告。
-4. 托盘:WSLg 无 tray host → `trayController` 走降级分支,启动日志里应出现 `tray unavailable, running tray-less`。
-5. 全局快捷键:WSLg 下仅对 WSL 内窗口有效;验证改用浮层按钮 / 设置页里的"立即翻译"。
-6. **剪贴板联调的关键手段**:WSLg 与 Windows 之间有文本剪贴板同步,但同步时机不完全可控。因此实现 `debug:injectClipboard(text)` 与设置页(仅 dev 显示)的"模拟剪贴板内容"输入框 —— 这样 Linux 侧可端到端验证"过滤 → 检测 → 翻译 → 入库 → 浮层渲染"整条链路,不依赖宿主剪贴板。**这是本期能在一期平台之外完成验证的核心保障。**
+1. `npm install && npm run dev` → electron-vite 起 dev server,浮层 / 设置窗 / 引导窗直接显示在本机 Windows 桌面上。
+2. 如遇 GPU/渲染异常:`npm run dev:gpu-off`(即 `TRANSLATE_CLIP_DISABLE_GPU=1`,代码里 `app.commandLine.appendSwitch('disable-gpu')`)。脚本已改成 Node 包装,Windows 下不会被 cmd.exe 吞掉环境变量。
+3. 剪贴板:Windows 上 `clipboard.readText()` 直读系统剪贴板,复制即触发 —— "过滤 → 检测 → 翻译 → 入库 → 浮层渲染"整条链路在前台/后台/多应用下都能真实验证,不再依赖两个系统之间的剪贴板同步时机。
+4. 托盘:Windows 有托盘宿主,启动日志与 `app:getPlatformCapabilities` 应给出 `tray: true`;`try/catch` 降级分支保留,但只有个别没有托盘宿主的 Linux 桌面才会走到。
+5. 全局快捷键:Windows 上为 `full`,切到别的程序后仍然生效;托盘与浮层按钮始终是兜底入口。
+6. **剪贴板联调仍要可确定性注入**:手速与剪贴板历史让"复现同一次复制"变得不可控,所以 `debug:injectClipboard(text)` 与设置页(仅 dev 显示)的"模拟剪贴板内容"输入框继续保留 —— 回归与单步调试走注入,验收走真实剪贴板。
+7. 高 DPI:150% 缩放下几何一律按 DIP 计算;改缩放比例或换多屏组合后复验浮层可见性夹取(§12-9)。
 
 ### 10.3 测试分层
 
 | 层 | 手段 | 覆盖 |
 | --- | --- | --- |
-| 单元(vitest) | 纯函数 / 依赖注入 | `clipboardFilter`(各 reason 分支)、`languageDetector`(中/英/日/韩/俄/混合/空)、`promptBuilder`(变量替换 + 术语注入上限)、响应解析(正常 JSON / 围栏 / 前后噪声 / 非 JSON 回落 / 数组 content)、`configStore.sanitize`(越界夹取)、`historyRepository`(内存 sql.js:insert→complete→list→prune→cache 命中)、`translationQueue`(latest-wins abort、重试、不重试 auth) |
+| 单元(vitest) | 纯函数 / 依赖注入 | 162 个用例:`clipboardFilter`(各 reason 分支)、`languageDetector`(中/英/日/韩/俄/混合/空)、`promptBuilder`(变量替换 + 术语注入上限)、响应解析(正常 JSON / 围栏 / 前后噪声 / 非 JSON 回落 / 数组 content)、`configStore.sanitize`(越界夹取)、`historyRepository`(内存 sql.js:insert→complete→list→prune→cache 命中)、`translationQueue`(latest-wins abort、重试、不重试 auth、自动替换写回) |
 | 集成(mock fetch) | `llmClient` + 队列 + 仓储 | 401/429/500/超时/中断路径 → 状态与历史落库正确 |
-| 手工(Linux/WSLg) | `npm run dev` | 浮层视觉/交互/折叠/穿透、**首启引导四步(含用全新 userData 复现首启)**、设置页各表单、dev 注入剪贴板的端到端链路、重启后配置与窗口位置恢复 |
-| 手工(Windows,你) | `npm run dev` + `npm run dist:win` | 真实剪贴板监听(前台/后台/多应用)、置顶层级、NSIS 安装、开机自启、托盘、快捷键 |
-| 静态 | `npm run typecheck` | 全量类型 |
+| 手工(Windows 本机,dev) | `npm run dev` | 浮层视觉/交互/折叠(按内容自适应)/穿透/暂停/清空/自动替换、**首启引导四步(含用全新 userData 复现首启)**、设置页各表单、dev 注入剪贴板的端到端链路、真实剪贴板监听(前台/后台/多应用)、置顶层级、托盘、快捷键、重启后配置与窗口位置恢复 |
+| 手工(Windows 安装版) | `npm run dist:win` | NSIS 安装/卸载、开机自启、托盘图标、单实例 |
+| 静态 + 冒烟 | `npm run typecheck`、`npm run self-check` | 全量类型(干净);自检 `[self-check] PASSED`、`"ok": true` 共 28 条(资源 / asar 布局 / sql.js wasm / 剪贴板管线 / 真实翻译 / 全部设置页 / 向导) |
+| Linux(CI) | `ubuntu-latest` workflow | `typecheck + test`、AppImage / deb 出包;Linux 桌面的真实行为(托盘宿主、Wayland 快捷键)按 §12 的产品限制处理 |
 
 ### 10.4 一期验收标准
 
-1. WSLg 下 `npm run dev` 可启动,浮层常驻置顶、可拖动、可折叠、可调透明度。
-2. 通过 dev 注入/真实剪贴板触发,400ms 内浮层进入 `translating`,成功后在浮层显示译文、耗时、provider/model。
+1. Windows 本机 `npm run dev` 可启动,浮层常驻置顶、可拖动、可折叠、可调透明度。
+2. 通过真实剪贴板(或 dev 注入)触发,400ms 内浮层进入 `translating`,成功后在浮层显示译文、耗时、provider/model。
 3. 连续复制两段不同文本:第一段请求被 abort,最终只显示第二段结果(无过期覆盖)。
 4. 未配置 provider 时给出引导而非报错崩溃;401/429/超时各有可区分的文案与重试入口。
-5. 复制译文回写剪贴板后**不会**触发新一轮翻译(自写抑制有效)。
+5. 复制译文回写剪贴板后**不会**触发新一轮翻译(自写抑制有效);开启"自动替换剪贴板"后同样不会自我循环。
 6. 重复复制同一段文本命中缓存,0 token 出结果并显示"缓存"徽标。
 7. 重启应用后:配置、Provider、历史、浮层位置全部恢复。
 8. 术语表命中时,强制译法生效,且注入条目数不超过上限。
 9. 中→英、英→中双向在 `auto` 模式下自动正确;`fixed` 模式严格单向。
-10. `npm run typecheck` 与 `npm run test` 全绿;`npm run dist:linux` 产出可运行的 AppImage。
-11. Windows 侧由你验证:NSIS 安装、真实剪贴板监听、置顶、托盘、开机自启。
+10. `npm run typecheck` 与 `npm run test` 全绿(本机 Windows);Linux 侧由 CI 跑同样两步并产出可运行的 AppImage / deb。
+11. Windows 安装与系统集成:NSIS 安装/卸载、开机自启、托盘、全局快捷键、单实例均正常(平台能力以 `app:getPlatformCapabilities` 的 `tray: true` / `globalShortcut: "full"` / `keyring: true` 为准)。
 12. **首启引导**:全新 `userData` 下首次启动先弹引导;第 1 步不选方向无法继续;第 2 步可跳过;"完成"后 `onboardingCompleted=true` 且重启不再弹;直接关窗等价跳过并让浮层显示 `unconfigured` 引导卡;设置页可重新运行向导。
 13. **无快捷键也能全流程可用**:默认配置下,靠"复制自动翻译 + 浮层按钮 + 托盘菜单"能完成翻译、查看历史、复制译文、暂停监听,不依赖任何全局加速键。
 
@@ -852,21 +861,21 @@ linux:
 
 | 阶段 | 内容 | 产出/验证 |
 | --- | --- | --- |
-| **P0 骨架** | 仓库脚手架 + `git init`、electron-vite + React + Tailwind v4 token、单实例、`configStore`(含 `onboardingCompleted`)、`windowManager`(浮层空壳 + 设置空壳)、单入口多视图、i18n 骨架、主题跟随、托盘降级、`app:getPlatformCapabilities` | WSLg 里能看到浮层与设置窗,`typecheck` 通过 |
+| **P0 骨架** | 仓库脚手架 + `git init`、electron-vite + React + Tailwind v4 token、单实例、`configStore`(含 `onboardingCompleted`)、`windowManager`(浮层空壳 + 设置空壳)、单入口多视图、i18n 骨架、主题跟随、托盘降级、`app:getPlatformCapabilities` | 本机 `npm run dev` 能看到浮层与设置窗,`typecheck` 通过 |
 | **P1 核心闭环 + 首启引导** | `clipboardWatcher` + `clipboardFilter` + `languageDetector` + `promptBuilder` + `llmClient` + `translationQueue` + `llmProviderCatalog/ConfigStore`(4 + Ollama)+ `historyRepository` + 浮层"当前/历史" + copy-back + 错误态 + dev 注入;**引导向导第 1、2 步(方向必填 + Provider 可跳过)** | 验收标准 1–7、12 达成 |
 | **P2 完整度** | Providers 设置页(模型拉取/测试连接)、提示词页 + 预览、术语表 CRUD + 导入导出、快捷键录制(默认空)、开机自启、缓存策略细化、调试日志、鼠标穿透、折叠态、忽略正则、i18n 补全;**引导向导第 3、4 步 + 重新运行向导入口** | 验收标准 8–9 达成 |
-| **P3 打包与跨平台** | electron-builder win/linux、图标资源、两个 CI workflow、README、macOS 适配设计(dock 隐藏、vibrancy、`LSUIElement`)、Wayland 原生剪贴板评估 | `dist:linux` 出包;Windows 交你验证 |
+| **P3 打包与跨平台** | electron-builder win/linux、图标资源、两个 CI workflow、README、macOS 适配设计(dock 隐藏、vibrancy、`LSUIElement`)、Wayland 原生剪贴板评估 | Linux 包由 CI 出包;Windows 包本机 `dist:win` 产出并验证 |
 
-每个阶段结束我都会跑 `npm run typecheck` + `npm run test`,并在 WSLg 里实际启动确认,再交给你确认。
+每个阶段结束我都会跑 `npm run typecheck` + `npm run test`,并在本机 Windows 上实际启动确认,再交给你确认。
 
 ---
 
 ## 12. 已知风险与平台限制(提前说清,不做事后解释)
 
 1. **独占全屏游戏无法覆盖**:DirectX 独占全屏绕过 DWM,任何置顶窗口都盖不住。需目标应用使用"无边框窗口"模式。浮层文档与设置页都会写明。
-2. **Wayland 原生剪贴板读取受限**:部分合成器要求客户端聚焦才能读剪贴板 → 一期以 X11/XWayland 为准(WSLg 即此路径);原生 Wayland 支持列 P3。
-3. **Linux `globalShortcut` 依赖 X11**:Wayland/WSLg 下宿主级快捷键不可用,托盘/浮层按钮兜底。
-4. **WSLg 无托盘宿主**:托盘功能在 WSL 开发期不可见,靠 `try/catch` 降级保证不阻塞;Windows 上验证。
+2. **Wayland 原生剪贴板读取受限(Linux 产品侧)**:部分合成器要求客户端聚焦才能读剪贴板 → Linux 一期以 X11/XWayland 为准;原生 Wayland 支持列 P3。Windows 走主进程 `readText()`,无此限制。
+3. **Linux `globalShortcut` 依赖 X11**:原生 Wayland 会话下可能注册失败,托盘/浮层按钮兜底;Windows 上实测为 `full`。
+4. **个别 Linux 桌面无托盘宿主**:托盘图标不可见,靠 `try/catch` 降级保证不阻塞启动;Windows 上托盘可用(`tray: true`)。
 5. **sql.js 每次写需导出整库**:用"debounce 1.5s + maxWait 5s + 原子写 + historyLimit 裁剪"控制成本;若历史规模被拉到数万条,再评估迁移 better-sqlite3(仓储接口已隔离,替换只影响一个文件)。
 6. **`transparent: true` 在 Windows 上的代价**:无 DWM 阴影、不能最大化、个别显卡驱动下 `backdrop-filter` 性能一般 → 提供"不透明模式"开关(设置页),一键退回不透明纯色背景。
 7. **LLM 输出不稳定**:三层解析回落 + 结构化 prompt 已覆盖;仍有模型返回垃圾的可能 → 状态条给出"重译"与"查看原始响应(调试日志)"入口。
@@ -885,13 +894,13 @@ linux:
 6. `src/main/services/{windowManager,trayController,shortcutManager,autoLaunch,glossaryStore,llmDebugLogger,logStore}.ts`
 7. `src/renderer/{index.html,main.tsx,App.tsx,tailwind.css,i18n/*,store/appStore.ts}`
 8. `src/renderer/components/ui/*`(8 个基础件)→ `overlay/*` → `onboarding/*`(4 步向导)→ `settings/*`
-9. `resources/` 图标 → `.github/workflows/{build-windows,build-linux}.yml` → `npm run dist:linux` 验证
+9. `resources/` 图标 → `.github/workflows/{build-windows,build-linux}.yml` → 由 Linux CI 出 `dist:linux` 包验证
 
 ---
 
 ## 14. 决策已闭环
 
-你已确认(§0 / §1.2):命名 `TranslateClip` / `剪译`、appId `com.ranxy.translateclip`、**默认不注册全局快捷键**、**首启引导配置翻译方向**、历史上限 500 + 缓存 24h、附加 Windows CI 出包、Linux 侧归我验证 / Windows 侧归你验证。
+你已确认(§0 / §1.2):命名 `TranslateClip` / `剪译`、appId `com.ranxy.translateclip`、**默认不注册全局快捷键**、**首启引导配置翻译方向**、历史上限 500 + 缓存 24h、附加 Windows CI 出包、开发与验证都在本机 Windows 11 上进行 / Linux 交付目标由 Linux CI 出包验证。
 
 以下是我按上面默认值自行拍板、**不阻塞开工**的细项(实现中或验收时可随时让我改):
 

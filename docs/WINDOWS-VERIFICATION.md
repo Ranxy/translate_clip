@@ -1,8 +1,11 @@
 # Windows 验证清单
 
-这份清单是自动化测试覆盖不到的部分。Linux/WSL 侧已经验证过:构建、类型、128 个单元测试、
-以及 `--self-check`(资源、asar 布局、sql.js wasm、剪贴板管线、真实翻译、全部设置页、向导)。
-**而"真实 Windows 桌面环境"里的行为只能在 Windows 上验。**
+这份清单是自动化测试覆盖不到的部分 —— 需要人眼判断的桌面行为(置顶层级、托盘、安装、自启、快捷键)。
+
+开发与验证都在本机 **Windows 11 + PowerShell 7** 上进行。已经验证过:构建、`npm run typecheck`(干净)、
+**162 个单元测试**、以及 `--self-check`(**28 条**,末行 `[self-check] PASSED`;覆盖资源、asar 布局、
+sql.js wasm、剪贴板管线、真实翻译、全部设置页、向导)。Linux 仍是交付目标(AppImage / deb,Linux CI 出包),
+但 Linux 桌面的平台差异不在本清单范围内(见 `DESIGN.md` §12 的产品限制)。
 
 每一条都给了**预期结果** —— 不一致就是 bug,请按最后一节提供信息。
 
@@ -15,13 +18,18 @@
 | 开发运行 | `npm install` → `npm run dev` | 快速迭代;此时**开机自启不可用**(UI 会置灰说明) |
 | 安装包 | `npm run dist:win` 或 Actions 页下载 | 验证真实安装体验、自启、托盘图标 |
 
-自动化自检(两条都要跑一次):
+自动化检查(三条都跑一次,预期都已在本机确认):
 
 ```
-npm run self-check
+npm run typecheck   # 无输出 = 干净
+npm run test        # 162 个单元测试全绿
+npm run self-check  # 末行 [self-check] PASSED("ok": true 共 28 条)
 ```
 
-预期:末行 `[self-check] PASSED`(`"ok": true` 共 20 条)。安装版也可以跑:
+自检会顺带打印平台能力探测,Windows 上应为 `tray: true`、`globalShortcut: "full"`、
+`keyring: true`(走 DPAPI);`launchAtLogin` 在开发运行下不可用是**设计如此**(见 §7)。
+
+安装版也可以跑:
 `"<安装目录>\TranslateClip.exe" --self-check`(会临时建一个指向本机回环 stub 的
 provider 并自动删除,不使用你的真实配置,也不会启动剪贴板监听)。
 
@@ -166,7 +174,7 @@ provider 并自动删除,不使用你的真实配置,也不会启动剪贴板监
 | 再次打开设置 | 开关仍是"开"(不会读回关闭状态) |
 | 关闭开关 | 启动项被移除(任务管理器里消失) |
 
-开发运行(`npm run dev`)下该开关**置灰**,并提示"开发模式下不会写入系统启动项"。
+开发运行(`npm run dev`)下该开关**置灰**,并提示"开发模式下不会写入系统启动项" —— 这是设计,不是缺陷(只有安装版才写启动项,见 §0 的平台能力预期)。
 
 ---
 
@@ -187,7 +195,7 @@ provider 并自动删除,不使用你的真实配置,也不会启动剪贴板监
 请提供三样东西,基本就能定位:
 
 1. 出问题的那一条编号 + 你看到的现象(截图最好)。
-2. `npm run self-check` 的完整输出(或安装版 `TranslateClip.exe --self-check`)。
+2. `npm run self-check` 的完整输出(应为 28 条 `"ok": true`、末行 `[self-check] PASSED`;或安装版 `TranslateClip.exe --self-check`)。
 3. 日志:`%APPDATA%\translate-clip\logs\main.log`(设置 → 关于 → 打开日志目录)。
 
 日志里已经包含:平台能力探测、剪贴板每次接受/跳过的原因与字符数、每次翻译的耗时与
