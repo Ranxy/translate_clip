@@ -8,7 +8,7 @@
   "main": "out/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "dev:gpu-off": "TRANSLATE_CLIP_DISABLE_GPU=1 electron-vite dev",
+    "dev:gpu-off": "node scripts/dev-gpu-off.mjs",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
