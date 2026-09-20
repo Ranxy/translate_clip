@@ -3,19 +3,40 @@
 Clipboard-monitoring LLM translator with an always-on-top overlay.
 Copy text anywhere; the translation appears in a small floating window.
 
-**Status:** phase 1 in progress.
+**Status:** feature-complete for phase 1/2 on Windows and Linux.
 
-- Done: configuration layer, overlay/settings/wizard shells, tray, global shortcuts,
-  launch-at-login, lifecycle, icon pipeline, the clipboard pipeline (polling watcher,
-  filtering, script-based language detection, direction resolution) and **LLM
-  translation** — provider profiles in sql.js with `safeStorage` credentials, an
-  OpenAI-compatible client with retries and three-layer response parsing, a
-  latest-wins queue, history with a reuse cache, and the provider settings page.
-- Next: history panel UI, provider setup inside the first-run wizard, prompt and
-  glossary editors, the shortcuts page, Windows packaging.
+- Configuration layer, overlay/settings/first-run wizard, tray, global shortcuts,
+  launch-at-login, lifecycle and the icon pipeline.
+- Clipboard pipeline: polling watcher with self-write suppression, filter chain,
+  script-based language detection and direction resolution (中↔英 works automatically).
+- Translation: provider profiles in sql.js with `safeStorage` credentials, an
+  OpenAI-compatible client with retries and three-layer response parsing, a latest-wins
+  queue, history with a reuse cache, and a glossary that is injected into the prompt.
+- UI: overlay with collapse/click-through/opacity and a history panel, provider setup,
+  prompt and parameter editor with a live preview, glossary editor, shortcut recorder.
+- Packaging: NSIS for Windows, AppImage + deb for Linux, and CI for both.
+
+Not done yet: macOS support, streaming responses (`streamEnabled` exists but is unused),
+and OCR/selection capture.
 
 Primary target: **Windows**. Linux (X11/WSLg) is the development and verification
 environment; macOS support is planned but not implemented.
+
+## Verifying on Windows
+
+1. `npm install`
+2. `npm run dev` — the first run opens the setup wizard. Step 1 sets the translation
+   direction (required), step 2 connects a provider (DeepSeek, OpenAI, OpenRouter,
+   Ollama or any OpenAI-compatible endpoint) and can be skipped.
+3. Copy text in any application. The overlay shows the source, the resolved direction
+   and — once a provider is configured — the translation.
+4. `npm run self-check` for the automated pass: shipped assets, a writable `userData`,
+   all views and settings tabs, the clipboard pipeline, a real translation through a
+   loopback stub provider, and the wizard.
+5. `npm run dist:win` for the installer, or download it from the Actions tab.
+
+On Windows `safeStorage` uses DPAPI, so API keys are encrypted at rest. The
+"no keyring" warning only appears on Linux installs without a keyring.
 
 ## Requirements
 
@@ -64,6 +85,33 @@ real provider profile, and it does not start clipboard watching.
 - Clipboard sync between the host and WSLg is not deterministic. Use
   `window.translateClip.debugInjectClipboard(text)` (available unpackaged) to drive the
   clipboard pipeline deterministically from the devtools console.
+- `electron-builder` downloads the Electron distribution from GitHub, which may be
+  blocked. To package from a checkout that already has `node_modules`, point it at the
+  installed distribution instead:
+  `npx electron-builder --linux dir -c.electronDist=node_modules/electron/dist`.
+  The produced `dist/linux-unpacked/translate-clip --self-check` is the closest local
+  equivalent of the Windows install, and is what verifies the asar layout.
+
+## Packaging
+
+| Command | Output |
+| --- | --- |
+| `npm run dist:win` | `dist/TranslateClip-<version>-x64.exe` (NSIS installer) |
+| `npm run dist:linux` | AppImage + deb in `dist/` |
+| `npm run pack` | Unpacked build, useful for inspecting the asar layout |
+
+Two things about the packaging are worth knowing, because both are easy to get wrong:
+
+- `resources/` is mapped **per directory** in `electron-builder.yml` (`resources/icons`
+  → `icons`) so the packaged paths match `resolveResourcePath()`. A plain
+  `from: resources, to: resources` would nest them one level deeper and the tray icon
+  would silently come out blank.
+- `sql.js` loads its `.wasm` at runtime, so it is listed under `asarUnpack`; without it
+  the database cannot open in a packaged build.
+
+CI: `.github/workflows/build-windows.yml` builds the installer on `windows-latest`
+(and runs type check, tests and the self-check), and `build-linux.yml` does the same on
+`ubuntu-latest` under `xvfb`. Both are also runnable from the Actions tab.
 
 ## Architecture
 

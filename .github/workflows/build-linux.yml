@@ -1,0 +1,51 @@
+name: Build Linux Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  linux-dist:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: End-to-end self-check
+        # Needs a display; xvfb provides one so the GUI checks really run here.
+        run: xvfb-run --auto-servernum npm run self-check
+
+      - name: Build AppImage and deb
+        run: npm run dist:linux
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: translate-clip-linux
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+          if-no-files-found: error

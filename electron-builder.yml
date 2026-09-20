@@ -6,10 +6,12 @@ files:
   - out/**/*
   - package.json
 extraResources:
-  - from: resources
-    to: resources
-    filter:
-      - "**/*"
+  # Mapped per directory so the packaged layout matches resolveResourcePath():
+  # <resources>/icons/... and <resources>/tray/...
+  - from: resources/icons
+    to: icons
+  - from: resources/tray
+    to: tray
 asar: true
 asarUnpack:
   - "**/node_modules/sql.js/dist/*.wasm"

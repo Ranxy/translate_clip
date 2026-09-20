@@ -1,0 +1,57 @@
+name: Build Windows Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  windows-dist:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Ensure the Electron binary is present
+        run: node node_modules/electron/install.js
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: End-to-end self-check
+        # Hosted runners do not always expose a desktop session, which the GUI
+        # checks need. Type check, unit tests and the installer build stay hard
+        # gates; this step is extra signal, not a gate.
+        continue-on-error: true
+        run: npm run self-check
+
+      - name: Build the installer
+        run: npm run dist:win
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: translate-clip-windows
+          path: |
+            dist/*.exe
+            dist/*.yml
+          if-no-files-found: error

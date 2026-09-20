@@ -743,9 +743,12 @@ class TranslateClipApp {
         })
       },
 
-      'debug:isEnabled': () => !app.isPackaged,
+      // The injector is only reachable from our own renderer frames (see
+      // isTrustedSender) and only meaningful for diagnostics, so it is allowed in
+      // development and for an explicit `--self-check` run of a packaged build.
+      'debug:isEnabled': () => !app.isPackaged || SELF_CHECK,
       'debug:injectClipboard': (text: string) => {
-        if (app.isPackaged) {
+        if (app.isPackaged && !SELF_CHECK) {
           return
         }
 
