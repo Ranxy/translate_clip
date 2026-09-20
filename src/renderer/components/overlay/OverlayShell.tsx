@@ -366,12 +366,21 @@ export function OverlayShell() {
         {tab === 'current' ? <CurrentPanel /> : <HistoryPanel active />}
 
         <div className="flex shrink-0 items-center gap-1.5 border-t border-border px-3 py-2">
-          <Button size="sm" onClick={() => void window.translateClip.translateClipboardNow()}>
+          {/* The short form of "translate clipboard now": at this width the full wording wrapped
+              inside its own button and took the whole row to two lines with it. The tooltip keeps
+              the longer phrasing. */}
+          <Button
+            size="sm"
+            className="whitespace-nowrap"
+            title={t('overlay.actionTranslateNow')}
+            onClick={() => void window.translateClip.translateClipboardNow()}
+          >
             <IconRefresh />
-            {t('overlay.actionTranslateNow')}
+            {t('overlay.actionTranslateShort')}
           </Button>
           <Button
             size="sm"
+            className="whitespace-nowrap"
             disabled={!canCopy}
             onClick={() => translationState.translatedText && void window.translateClip.copyText(translationState.translatedText)}
           >
@@ -398,7 +407,7 @@ export function OverlayShell() {
                 data-tab={value}
                 onClick={() => setTab(value)}
                 className={cn(
-                  'rounded-md px-2 py-1 text-[11.5px] transition-colors',
+                  'whitespace-nowrap rounded-md px-2 py-1 text-[11.5px] transition-colors',
                   tab === value ? 'bg-surface-strong text-text shadow-sm' : 'text-muted hover:text-text'
                 )}
               >

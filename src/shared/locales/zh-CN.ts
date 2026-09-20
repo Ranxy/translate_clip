@@ -36,6 +36,7 @@ export const zhCN = {
     tabCurrent: '当前',
     tabHistory: '历史',
     actionTranslateNow: '立即翻译剪贴板',
+    actionTranslateShort: '立即翻译',
     actionRetranslate: '重译',
     actionCopy: '复制译文',
     actionClear: '清空',

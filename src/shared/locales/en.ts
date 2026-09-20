@@ -33,6 +33,7 @@ export const en: LocaleResource = {
     tabCurrent: 'Current',
     tabHistory: 'History',
     actionTranslateNow: 'Translate clipboard now',
+    actionTranslateShort: 'Translate now',
     actionRetranslate: 'Translate again',
     actionCopy: 'Copy translation',
     actionClear: 'Clear',
