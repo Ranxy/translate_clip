@@ -11,6 +11,23 @@ export type RendererView = WindowKind
 /** Height the overlay shrinks to in collapsed mode (header + one status line). */
 const COLLAPSED_OVERLAY_HEIGHT = 76
 
+/**
+ * How long a resize event is attributed to us rather than to the user.
+ *
+ * The OS reports a programmatic `setBounds` back within a frame or two; a drag
+ * cannot realistically start and finish inside this window.
+ */
+const OVERLAY_RESIZE_GUARD_MS = 400
+
+/**
+ * Smallest change in either dimension that counts as the user dragging an edge.
+ *
+ * Windows does not return the size a frameless window was asked for — it comes
+ * back a few pixels larger — so anything below this is rounding noise that would
+ * otherwise accumulate into growth.
+ */
+const MIN_DRAG_DELTA_DIP = 8
+
 export interface WindowManagerOptions {
   preloadPath: string
   rendererIndexPath: string
@@ -44,7 +61,31 @@ export class WindowManager {
   private overlay: BrowserWindow | null = null
   private settings: BrowserWindow | null = null
   private onboarding: BrowserWindow | null = null
-  private expandedOverlayBounds: { x: number; y: number; width: number; height: number } | null = null
+
+  /**
+   * Size the overlay is *meant* to have, in the units the constructor takes.
+   *
+   * The window's own bounds are not a usable source of truth: on Windows a
+   * frameless window comes back from `getBounds()` larger than the size it was
+   * created with (4 DIP at 150% scaling), and the offset is not even stable — it
+   * changes with the requested size and the window's fractional position. Storing
+   * those reported bounds and feeding them into the next launch grows the overlay
+   * on every start, forever. Keeping the requested size here breaks that loop.
+   */
+  private overlaySize: { width: number; height: number } | null = null
+  private expandedOverlaySize: { width: number; height: number } | null = null
+
+  /**
+   * While set, overlay resize events are ours rather than the user dragging an
+   * edge, and must not be mistaken for a new preferred size.
+   */
+  private overlayResizeGuardUntil = 0
+
+  /**
+   * Size the OS last reported for the overlay, used as the baseline a drag is
+   * measured against.
+   */
+  private overlayMeasuredSize: { width: number; height: number } | null = null
 
   constructor(private readonly options: WindowManagerOptions) {}
 
@@ -84,6 +125,14 @@ export class WindowManager {
     })
 
     this.overlay = window
+    this.overlaySize = { width: bounds.width, height: bounds.height }
+
+    // Creating (and later showing) the window makes the OS report a size that is a
+    // few pixels off from the one requested. Record it as the baseline and treat
+    // the following events as ours, so that offset is never adopted.
+    const created = window.getBounds()
+    this.overlayMeasuredSize = { width: created.width, height: created.height }
+    this.overlayResizeGuardUntil = Date.now() + OVERLAY_RESIZE_GUARD_MS
 
     // 'screen-saver' is the highest level Windows honours without exclusive
     // fullscreen, and it is accepted (and ignored) on Linux.
@@ -111,7 +160,9 @@ export class WindowManager {
 
     window.on('closed', () => {
       this.overlay = null
-      this.expandedOverlayBounds = null
+      this.overlaySize = null
+      this.overlayMeasuredSize = null
+      this.expandedOverlaySize = null
     })
 
     this.applyOverlayBehaviour(config)
@@ -173,17 +224,15 @@ export class WindowManager {
       return
     }
 
-    const bounds = window.getBounds()
-
     if (collapsed) {
-      this.expandedOverlayBounds = { ...bounds }
-      window.setBounds({ ...bounds, height: COLLAPSED_OVERLAY_HEIGHT })
+      this.expandedOverlaySize = this.overlaySize ? { ...this.overlaySize } : null
+      this.resizeOverlay(window, { height: COLLAPSED_OVERLAY_HEIGHT })
       return
     }
 
-    const restoredHeight = this.expandedOverlayBounds?.height ?? this.options.getConfig().overlay.height
-    window.setBounds({ ...bounds, height: Math.max(restoredHeight, COLLAPSED_OVERLAY_HEIGHT) })
-    this.expandedOverlayBounds = null
+    const restoredHeight = this.expandedOverlaySize?.height ?? this.options.getConfig().overlay.height
+    this.expandedOverlaySize = null
+    this.resizeOverlay(window, { height: Math.max(restoredHeight, COLLAPSED_OVERLAY_HEIGHT) })
   }
 
   setOverlayClickThrough(enabled: boolean): void {
@@ -212,9 +261,25 @@ export class WindowManager {
       return
     }
 
+    const currentHeight = this.overlaySize?.height ?? window.getBounds().height
+    this.resizeOverlay(window, { height: Math.min(Math.max(currentHeight + deltaY, 120), 900) })
+  }
+
+  /**
+   * Applies a size to the overlay and records it as the intended one.
+   *
+   * Everything that changes the overlay's size goes through here so the value that
+   * gets persisted is always the value that was requested, never the size Windows
+   * reports back (see `overlaySize`).
+   */
+  private resizeOverlay(window: BrowserWindow, next: { width?: number; height?: number }): void {
     const bounds = window.getBounds()
-    const nextHeight = Math.min(Math.max(bounds.height + deltaY, 120), 900)
-    window.setBounds({ ...bounds, height: nextHeight })
+    const width = next.width ?? this.overlaySize?.width ?? bounds.width
+    const height = next.height ?? this.overlaySize?.height ?? bounds.height
+
+    this.overlaySize = { width, height }
+    this.overlayResizeGuardUntil = Date.now() + OVERLAY_RESIZE_GUARD_MS
+    window.setBounds({ x: bounds.x, y: bounds.y, width, height })
   }
 
   /**
@@ -474,6 +539,8 @@ export class WindowManager {
     }
 
     const schedule = () => {
+      this.adoptUserResize(window, kind)
+
       if (timer) {
         clearTimeout(timer)
       }
@@ -488,24 +555,66 @@ export class WindowManager {
     window.on('close', persistNow)
   }
 
+  /**
+   * Adopts a size the user dragged the overlay to.
+   *
+   * `overlaySize` only moves when *we* move it, so without this a drag would be
+   * forgotten on the next launch. The drag is expressed as the *change* from the
+   * last size the OS reported, so the few pixels Windows adds to whatever it is
+   * asked for cancel out instead of accumulating.
+   */
+  private adoptUserResize(window: BrowserWindow, kind: WindowKind): void {
+    if (kind !== 'overlay') {
+      return
+    }
+
+    const bounds = window.getBounds()
+    const baseline = this.overlayMeasuredSize
+    this.overlayMeasuredSize = { width: bounds.width, height: bounds.height }
+
+    if (!this.overlaySize || !baseline || this.expandedOverlaySize) {
+      return
+    }
+
+    if (Date.now() < this.overlayResizeGuardUntil) {
+      return
+    }
+
+    const deltaWidth = bounds.width - baseline.width
+    const deltaHeight = bounds.height - baseline.height
+
+    if (Math.abs(deltaWidth) < MIN_DRAG_DELTA_DIP && Math.abs(deltaHeight) < MIN_DRAG_DELTA_DIP) {
+      return
+    }
+
+    this.overlaySize = {
+      width: Math.max(this.overlaySize.width + deltaWidth, 300),
+      height: Math.max(this.overlaySize.height + deltaHeight, 200)
+    }
+  }
+
   private captureWindowState(
     window: BrowserWindow,
     kind: WindowKind
   ): { x?: number; y?: number; width: number; height: number; isMaximized: boolean } {
     const bounds = window.isMaximized() ? window.getNormalBounds() : window.getBounds()
 
-    // The collapsed height is an artefact of the collapsed bar, not a preference:
-    // persisting it would bring the overlay back as a tall empty bar next launch.
-    const height =
-      kind === 'overlay' && this.options.getConfig().overlay.collapsed && this.expandedOverlayBounds
-        ? this.expandedOverlayBounds.height
-        : bounds.height
+    if (kind === 'overlay' && this.overlaySize) {
+      // The collapsed height is an artefact of the collapsed bar, not a preference:
+      // persisting it would bring the overlay back as a tall empty bar next launch.
+      const height =
+        this.options.getConfig().overlay.collapsed && this.expandedOverlaySize
+          ? this.expandedOverlaySize.height
+          : this.overlaySize.height
+
+      return { x: bounds.x, y: bounds.y, width: this.overlaySize.width, height, isMaximized: false }
+    }
 
     return {
       x: bounds.x,
       y: bounds.y,
       width: bounds.width,
-      height,
+      height: bounds.height,
       isMaximized: window.isMaximized()
     }
   }
