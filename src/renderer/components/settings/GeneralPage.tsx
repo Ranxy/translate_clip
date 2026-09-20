@@ -65,10 +65,14 @@ export function GeneralPage() {
 
         <Divider />
 
-        <Field label={t('settings.general.launchAtLogin')} hint={t('settings.general.launchAtLoginHint')}>
+        <Field
+          label={t('settings.general.launchAtLogin')}
+          hint={capabilities.launchAtLogin ? t('settings.general.launchAtLoginHint') : t('settings.general.launchAtLoginUnsupported')}
+        >
           <Switch
             label={t('settings.general.launchAtLogin')}
             checked={config.launchAtLogin}
+            disabled={!capabilities.launchAtLogin}
             onChange={(checked) => void store.updateConfig({ launchAtLogin: checked })}
           />
         </Field>

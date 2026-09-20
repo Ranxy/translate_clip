@@ -21,6 +21,8 @@ export interface TrayControllerOptions {
   getConfig: () => AppConfig
   getTranslator: () => Translator
   isOverlayVisible: () => boolean
+  /** False in a development run; the menu item is then omitted rather than lying. */
+  isLaunchAtLoginAvailable: () => boolean
   actions: TrayActions
   log: Logger
 }
@@ -114,12 +116,16 @@ export class TrayController {
         label: t('tray.openLogFolder'),
         click: () => this.options.actions.openLogFolder()
       },
-      {
-        label: t('settings.general.launchAtLogin'),
-        type: 'checkbox',
-        checked: config.launchAtLogin,
-        click: (item) => this.options.actions.setLaunchAtLogin(item.checked)
-      },
+      ...(this.options.isLaunchAtLoginAvailable()
+        ? [
+            {
+              label: t('settings.general.launchAtLogin'),
+              type: 'checkbox' as const,
+              checked: config.launchAtLogin,
+              click: (item: { checked: boolean }) => this.options.actions.setLaunchAtLogin(item.checked)
+            }
+          ]
+        : []),
       { type: 'separator' },
       {
         label: t('tray.quit'),

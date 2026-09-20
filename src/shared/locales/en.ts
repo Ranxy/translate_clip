@@ -117,6 +117,7 @@ export const en: LocaleResource = {
       closeToTrayHint: 'Clipboard watching continues; reopen the overlay from the tray.',
       launchAtLogin: 'Launch at login',
       launchAtLoginHint: 'Starts silently in the background at login.',
+      launchAtLoginUnsupported: 'A development run does not register a startup entry; install the app for this to take effect.',
       historyLimit: 'History limit',
       historyLimitHint: 'Oldest unpinned entries are removed beyond this limit.',
       rerunOnboarding: 'Run the setup wizard again',

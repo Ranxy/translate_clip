@@ -120,6 +120,7 @@ export const zhCN = {
       closeToTrayHint: '关闭后应用继续监听剪贴板,从托盘可重新打开浮层。',
       launchAtLogin: '开机自动启动',
       launchAtLoginHint: '开机后静默启动并监听剪贴板。',
+      launchAtLoginUnsupported: '开发模式下不会写入系统启动项；安装后此项才会生效。',
       historyLimit: '历史记录上限',
       historyLimitHint: '超出后自动删除最旧的非收藏记录。',
       rerunOnboarding: '重新运行初始向导',

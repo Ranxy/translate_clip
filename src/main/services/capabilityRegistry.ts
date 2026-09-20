@@ -2,6 +2,7 @@ import { safeStorage } from 'electron'
 
 import type { GlobalShortcutSupport, PlatformCapabilities, PlatformId } from '@shared/types'
 
+import { canManageLaunchAtLogin } from './autoLaunch'
 import type { Logger } from './logStore'
 
 export interface CapabilityRegistry {
@@ -55,7 +56,8 @@ export function createCapabilityRegistry(log: Logger): CapabilityRegistry {
     platform,
     tray: trayAvailable,
     globalShortcut: detectGlobalShortcutSupport(platform),
-    keyring
+    keyring,
+    launchAtLogin: canManageLaunchAtLogin()
   })
 
   return {

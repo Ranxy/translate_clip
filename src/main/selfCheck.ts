@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, nativeImage } from 'electron'
 import { access, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -10,6 +10,13 @@ export interface SelfCheckTarget {
   label: string
 }
 
+export interface IconAsset {
+  label: string
+  path: string
+  /** Logical size in DIP; the `@2x` tray file therefore reports its half size. */
+  expectedSize: number
+}
+
 export interface SelfCheckOptions {
   preloadPath: string
   rendererIndexPath: string
@@ -17,6 +24,7 @@ export interface SelfCheckOptions {
   userDataPath: string
   trayIconPath: string
   appIconPath: string
+  iconAssets: IconAsset[]
   log: Logger
 }
 
@@ -396,6 +404,21 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
     ['app icon', options.appIconPath]
   ] as const) {
     push(name, await fileExists(path), path)
+  }
+
+  // Decoding is the only check that proves an asset is actually usable: a file can
+  // exist, be the right size on disk and still be an image Chromium cannot read
+  // (which is what a blank tray icon or a rejected installer icon looks like).
+  for (const asset of options.iconAssets) {
+    const image = nativeImage.createFromPath(asset.path)
+    const size = image.getSize()
+    const decoded = !image.isEmpty()
+
+    push(
+      `icon decode: ${asset.label}`,
+      decoded && size.width === asset.expectedSize && size.height === asset.expectedSize,
+      decoded ? `${size.width}x${size.height} (expected ${asset.expectedSize})` : `could not decode ${asset.path}`
+    )
   }
 
   const probePath = join(options.userDataPath, '.self-check-probe')

@@ -28,7 +28,7 @@ import type {
 
 import { createTranslator, type Translator } from './i18n'
 import { registerIpcRouter, type IpcHandler } from './ipc/ipcRouter'
-import { getLaunchAtLogin, setLaunchAtLogin } from './services/autoLaunch'
+import { canManageLaunchAtLogin, getLaunchAtLogin, setLaunchAtLogin } from './services/autoLaunch'
 import { createCapabilityRegistry, type CapabilityRegistry } from './services/capabilityRegistry'
 import { ClipboardWatcher } from './services/clipboardWatcher'
 import { compileIgnorePatterns, filterClipboardText, type FilterContext } from './services/clipboardFilter'
@@ -168,6 +168,7 @@ class TranslateClipApp {
       getConfig: () => this.config,
       getTranslator: () => this.translator,
       isOverlayVisible: () => this.windowManager.isOverlayVisible(),
+      isLaunchAtLoginAvailable: () => canManageLaunchAtLogin(),
       log: this.logger,
       actions: {
         toggleOverlay: () => {
@@ -320,7 +321,9 @@ class TranslateClipApp {
   private async syncLaunchAtLogin(): Promise<void> {
     try {
       const actual = await getLaunchAtLogin()
-      if (actual !== this.config.launchAtLogin) {
+      // null means this environment cannot be queried (a development run); the stored
+      // preference is then simply left alone instead of being "corrected".
+      if (actual !== null && actual !== this.config.launchAtLogin) {
         await setLaunchAtLogin(this.config.launchAtLogin, this.logger)
       }
     } catch (error) {
@@ -828,18 +831,27 @@ class TranslateClipApp {
       userDataPath: app.getPath('userData'),
       trayIconPath: resolveResourcePath('tray', 'tray.png'),
       appIconPath: resolveResourcePath('icons', 'icon.png'),
+      iconAssets: [
+        { label: 'icons/icon.png', path: resolveResourcePath('icons', 'icon.png'), expectedSize: 512 },
+        { label: 'icons/256x256.png', path: resolveResourcePath('icons', '256x256.png'), expectedSize: 256 },
+        { label: 'icons/32x32.png', path: resolveResourcePath('icons', '32x32.png'), expectedSize: 32 },
+        { label: 'tray/tray.png', path: resolveResourcePath('tray', 'tray.png'), expectedSize: 32 },
+        { label: 'tray/tray@2x.png', path: resolveResourcePath('tray', 'tray@2x.png'), expectedSize: 32 }
+      ],
       log: this.logger
     })
   }
 
   /* ── Lifecycle ───────────────────────────────────────────────────── */
 
+  /**
+   * Surfaces the app when a second instance starts (clicking its icon again, for
+   * example). The overlay is normally already visible, so the settings window is
+   * what the user is actually asking for.
+   */
   focusPrimaryWindow(): void {
     this.windowManager.showOverlay()
-
-    if (this.windowManager.getSettingsWindow()) {
-      this.windowManager.openSettingsWindow()
-    }
+    this.windowManager.openSettingsWindow()
   }
 
   handleThemeUpdated(): void {

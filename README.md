@@ -24,19 +24,25 @@ environment; macOS support is planned but not implemented.
 
 ## Verifying on Windows
 
+**The full checklist — with the expected result for every step — is
+[`docs/WINDOWS-VERIFICATION.md`](docs/WINDOWS-VERIFICATION.md).** It covers the parts
+that no automated test can reach from Linux: the real clipboard, overlay stacking,
+the tray, global shortcuts, autostart and the installer.
+
 1. `npm install`
 2. `npm run dev` — the first run opens the setup wizard. Step 1 sets the translation
    direction (required), step 2 connects a provider (DeepSeek, OpenAI, OpenRouter,
    Ollama or any OpenAI-compatible endpoint) and can be skipped.
 3. Copy text in any application. The overlay shows the source, the resolved direction
    and — once a provider is configured — the translation.
-4. `npm run self-check` for the automated pass: shipped assets, a writable `userData`,
-   all views and settings tabs, the clipboard pipeline, a real translation through a
-   loopback stub provider, and the wizard.
+4. `npm run self-check` for the automated pass: shipped assets, icon decoding, a
+   writable `userData`, all views and settings tabs, the clipboard pipeline, a real
+   translation through a loopback stub provider, and the wizard.
 5. `npm run dist:win` for the installer, or download it from the Actions tab.
 
 On Windows `safeStorage` uses DPAPI, so API keys are encrypted at rest. The
-"no keyring" warning only appears on Linux installs without a keyring.
+"no keyring" warning only appears on Linux installs without a keyring, and the
+launch-at-login switch is disabled in development runs (it needs an installed build).
 
 ## Requirements
 

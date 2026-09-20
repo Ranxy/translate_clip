@@ -261,10 +261,18 @@ export function OnboardingShell() {
             <h1 className="text-[15px] font-semibold">{t('onboarding.integrationTitle')}</h1>
             <p className="mb-2 text-[12.5px] leading-relaxed text-muted">{t('onboarding.integrationBody')}</p>
 
-            <Field label={t('settings.general.launchAtLogin')} hint={t('settings.general.launchAtLoginHint')}>
+            <Field
+              label={t('settings.general.launchAtLogin')}
+              hint={
+                diagnostics.capabilities.launchAtLogin
+                  ? t('settings.general.launchAtLoginHint')
+                  : t('settings.general.launchAtLoginUnsupported')
+              }
+            >
               <Switch
                 label={t('settings.general.launchAtLogin')}
                 checked={draft.launchAtLogin}
+                disabled={!diagnostics.capabilities.launchAtLogin}
                 onChange={(checked) => setDraft((current) => ({ ...current, launchAtLogin: checked }))}
               />
             </Field>

@@ -23,6 +23,8 @@ export interface PlatformCapabilities {
   globalShortcut: GlobalShortcutSupport
   /** True when Electron's safeStorage can actually encrypt (a system keyring is present). */
   keyring: boolean
+  /** False in a development run, where registering a startup entry would be meaningless. */
+  launchAtLogin: boolean
 }
 
 /* ── LLM providers ─────────────────────────────────────────────────── */

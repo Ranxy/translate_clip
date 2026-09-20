@@ -3,10 +3,13 @@
  * Generates the icon assets used by electron-builder and the tray.
  *
  * Why a generator instead of committed binaries: the app needs a PNG set for
- * Linux, a multi-size ICO for Windows and a small PNG for the tray, and none of
- * the machines this project is built on are guaranteed to have ImageMagick or
- * any other image tooling. Everything here is dependency-free: a minimal PNG
- * encoder and a minimal ICO (DIB + PNG) writer on top of node:zlib.
+ * Linux, a 512px source for Windows (electron-builder converts it to ICO) and a
+ * DPI-aware pair for the tray, and none of the machines this project is built on
+ * is guaranteed to have ImageMagick or any other image tooling.
+ *
+ * Everything here is dependency-free — a minimal PNG encoder on top of node:zlib —
+ * and every asset it writes is a PNG, which is the one format that can be verified
+ * by decoding it with Chromium on any platform.
  *
  * Usage: npm run icons
  */
@@ -73,65 +76,6 @@ function encodePng(width, height, rgba) {
     pngChunk('IDAT', deflateSync(raw, { level: 9 })),
     pngChunk('IEND', Buffer.alloc(0))
   ])
-}
-
-/* ── ICO encoding (32bpp DIB entries + one PNG entry for 256px) ────── */
-
-function encodeDibEntry(width, height, rgba) {
-  const header = Buffer.alloc(40)
-  header.writeUInt32LE(40, 0) // biSize
-  header.writeInt32LE(width, 4) // biWidth
-  header.writeInt32LE(height * 2, 8) // biHeight (XOR + AND mask)
-  header.writeUInt16LE(1, 12) // biPlanes
-  header.writeUInt16LE(32, 14) // biBitCount
-  header.writeUInt32LE(0, 16) // BI_RGB
-
-  const pixels = Buffer.alloc(width * height * 4)
-  for (let y = 0; y < height; y += 1) {
-    const sourceRow = (height - 1 - y) * width * 4 // DIB rows are bottom-up
-    for (let x = 0; x < width; x += 1) {
-      const from = sourceRow + x * 4
-      const to = (y * width + x) * 4
-      pixels[to] = rgba[from + 2] // B
-      pixels[to + 1] = rgba[from + 1] // G
-      pixels[to + 2] = rgba[from] // R
-      pixels[to + 3] = rgba[from + 3] // A
-    }
-  }
-
-  const maskStride = Math.ceil(width / 32) * 4
-  const mask = Buffer.alloc(maskStride * height) // fully transparent alpha already
-
-  return Buffer.concat([header, pixels, mask])
-}
-
-/**
- * `entries` is a list of { size, data, isPng } where data is either RGBA bytes
- * (isPng false, encoded as DIB) or an encoded PNG buffer (isPng true).
- */
-function encodeIco(entries) {
-  const header = Buffer.alloc(6)
-  header.writeUInt16LE(0, 0)
-  header.writeUInt16LE(1, 2) // type: icon
-  header.writeUInt16LE(entries.length, 4)
-
-  const directory = Buffer.alloc(16 * entries.length)
-  let offset = 6 + directory.length
-
-  entries.forEach((entry, index) => {
-    const at = index * 16
-    directory[at] = entry.size >= 256 ? 0 : entry.size
-    directory[at + 1] = entry.size >= 256 ? 0 : entry.size
-    directory[at + 2] = 0 // palette colours
-    directory[at + 3] = 0 // reserved
-    directory.writeUInt16LE(1, at + 4) // planes
-    directory.writeUInt16LE(32, at + 6) // bit count
-    directory.writeUInt32LE(entry.data.length, at + 8)
-    directory.writeUInt32LE(offset, at + 12)
-    offset += entry.data.length
-  })
-
-  return Buffer.concat([header, directory, ...entries.map((entry) => entry.data)])
 }
 
 /* ── Artwork ───────────────────────────────────────────────────────── */
@@ -261,16 +205,6 @@ async function main() {
   for (const size of [16, 24, 32, 48, 64, 128, 256, 512]) {
     await writeFileAt(`resources/icons/${size}x${size}.png`, png(size))
   }
-
-  await writeFileAt(
-    'resources/icons/icon.ico',
-    encodeIco([
-      { size: 16, data: encodeDibEntry(16, 16, renderIcon(16)) },
-      { size: 32, data: encodeDibEntry(32, 32, renderIcon(32)) },
-      { size: 48, data: encodeDibEntry(48, 48, renderIcon(48)) },
-      { size: 256, data: png(256), isPng: true }
-    ])
-  )
 
   await writeFileAt('resources/tray/tray.png', png(32))
   await writeFileAt('resources/tray/tray@2x.png', png(64))

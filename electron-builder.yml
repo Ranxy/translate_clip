@@ -21,7 +21,11 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: resources/icons/icon.ico
+  # electron-builder converts this PNG to a multi-size ICO on the Windows side
+  # (getOrConvertIcon('ico') accepts .png). Shipping our own hand-rolled .ico was
+  # worse: ICO cannot be decoded by nativeImage on Linux, so the file could not be
+  # verified anywhere except on Windows.
+  icon: resources/icons/icon.png
 nsis:
   oneClick: false
   perMachine: false
