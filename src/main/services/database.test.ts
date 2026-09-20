@@ -43,11 +43,22 @@ describe('createDatabaseService', () => {
     service.getDatabase().run("INSERT INTO translations (id, source_text, source_hash, source_language, target_language, provider_id, model_name, status, char_count, created_at, updated_at) VALUES ('a','x','h','en','zh-CN','openai','m','done',1,'2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z')")
     service.schedulePersist()
 
-    // The debounce is 1.5s; give it room without making the suite slow.
-    await new Promise((resolve) => setTimeout(resolve, 1_800))
+    // Poll rather than sleeping a fixed amount: the debounce is 1.5s, and a fixed
+    // wait is exactly the kind of race that makes a suite flaky under load.
+    const deadline = Date.now() + 8_000
+    let persisted = false
 
-    const raw = await readFile(filePath)
-    expect(raw.byteLength).toBeGreaterThan(0)
+    while (!persisted && Date.now() < deadline) {
+      persisted = await readFile(filePath)
+        .then((raw) => raw.byteLength > 0)
+        .catch(() => false)
+
+      if (!persisted) {
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+    }
+
+    expect(persisted).toBe(true)
 
     const reloaded = createDatabaseService({ filePath, log: createFakeLogger() })
     await reloaded.load()

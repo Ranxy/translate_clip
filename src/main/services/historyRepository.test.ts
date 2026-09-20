@@ -95,6 +95,21 @@ describe('HistoryRepository', () => {
     expect(new Set([...firstPage.items, ...secondPage.items].map((item) => item.id))).toEqual(new Set(ids))
   })
 
+  it('paginates correctly when entries share a timestamp', () => {
+    const ids = ['a', 'b', 'c'].map(() => history.insertPending(PENDING))
+
+    // A fast machine produces colliding milliseconds on its own, but a test cannot
+    // rely on that, so force the collision the pagination has to survive.
+    database.getDatabase().run("UPDATE translations SET created_at = '2026-01-01T00:00:00.000Z'")
+
+    const firstPage = history.list({ limit: 2 })
+    expect(firstPage.items).toHaveLength(2)
+
+    const secondPage = history.list({ limit: 2, cursor: firstPage.nextCursor })
+    expect(secondPage.items).toHaveLength(1)
+    expect(new Set([...firstPage.items, ...secondPage.items].map((item) => item.id))).toEqual(new Set(ids))
+  })
+
   it('searches source and translated text', () => {
     const id = history.insertPending(PENDING)
     history.markCompleted(id, { translatedText: '你好世界', detectedLanguage: 'en', latencyMs: 100, cached: false })

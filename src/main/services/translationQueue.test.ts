@@ -126,9 +126,12 @@ describe('TranslationQueue', () => {
     expect(states.at(-1)?.translatedText).toBe('第二个')
     expect(states.at(-1)?.sourceText).toBe('second copy')
 
-    // The superseded row is removed rather than recorded as a failure.
+    // The superseded row is removed by the *aborted* job's own async branch, which
+    // can settle after the newer job completes — so wait for it instead of assuming
+    // it already happened.
+    await waitFor(() => history.list({}).items.length === 1)
+
     const page = history.list({})
-    expect(page.items).toHaveLength(1)
     expect(page.items[0].sourceText).toBe('second copy')
   })
 
@@ -219,8 +222,7 @@ describe('TranslationQueue', () => {
     queue.cancel()
 
     expect(states.at(-1)?.phase).toBe('canceled')
-    await new Promise((resolve) => setTimeout(resolve, 120))
-    expect(history.list({}).items).toHaveLength(0)
+    await waitFor(() => history.list({}).items.length === 0)
   })
 
   it('prunes history beyond the configured limit', async () => {

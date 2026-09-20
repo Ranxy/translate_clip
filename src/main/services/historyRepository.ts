@@ -35,6 +35,32 @@ const COLUMNS = [
 
 const DEFAULT_PAGE_SIZE = 30
 const MAX_PAGE_SIZE = 200
+const CURSOR_SEPARATOR = '|'
+
+/**
+ * Keyset cursor: timestamp plus id.
+ *
+ * A timestamp alone is not unique — several rows can share a millisecond — and a
+ * cursor that only compared `created_at` would disagree with the
+ * `(created_at DESC, id DESC)` ordering, silently skipping the rows on the page
+ * boundary.
+ */
+function encodeCursor(record: TranslationRecord): string {
+  return `${record.createdAt}${CURSOR_SEPARATOR}${record.id}`
+}
+
+function decodeCursor(cursor: string): { createdAt: string; id: string | null } {
+  const separator = cursor.indexOf(CURSOR_SEPARATOR)
+
+  if (separator === -1) {
+    return { createdAt: cursor, id: null }
+  }
+
+  return {
+    createdAt: cursor.slice(0, separator),
+    id: cursor.slice(separator + CURSOR_SEPARATOR.length) || null
+  }
+}
 
 interface TranslationRow {
   id: string
@@ -215,8 +241,16 @@ export class HistoryRepository {
     }
 
     if (query.cursor) {
-      conditions.push('created_at < ?')
-      params.push(query.cursor)
+      const cursor = decodeCursor(query.cursor)
+
+      if (cursor.id) {
+        conditions.push('(created_at < ? OR (created_at = ? AND id < ?))')
+        params.push(cursor.createdAt, cursor.createdAt, cursor.id)
+      } else {
+        // Cursor written by an older build, or by a caller that only has a timestamp.
+        conditions.push('created_at < ?')
+        params.push(cursor.createdAt)
+      }
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
@@ -230,11 +264,12 @@ export class HistoryRepository {
 
     const hasMore = rows.length > limit
     const items = rows.slice(0, limit).map(toRecord)
+    const lastItem = items.at(-1)
 
     return {
       items,
       hasMore,
-      nextCursor: hasMore ? (items.at(-1)?.createdAt ?? null) : null
+      nextCursor: hasMore && lastItem ? encodeCursor(lastItem) : null
     }
   }
 
