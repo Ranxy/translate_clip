@@ -81,12 +81,22 @@ export function toAccelerator(event: {
 
 function ShortcutRow({ action, label }: { action: ShortcutAction; label: string }) {
   const { t } = useTranslation()
-  const { config, shortcutState } = useAppState().bootstrap
+  const appState = useAppState()
+  const { config } = appState.bootstrap
   const [recording, setRecording] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const accelerator = config.shortcuts[action]
-  const state = shortcutState[action]
+
+  /**
+   * The live registration state, not `bootstrap.shortcutState`.
+   *
+   * That one is the snapshot from whenever this window loaded its payload, while the state itself
+   * is maintained by the `shortcut:state` broadcast. Reading the snapshot meant the first recording
+   * of a session displayed the *previous* outcome — "registration failed" for a shortcut that had
+   * just registered, corrected only by reopening the window, which fetched a fresh payload.
+   */
+  const state = appState.shortcutState[action]
 
   const apply = async (next: string | null) => {
     const result = await window.translateClip.setShortcut(action, next)

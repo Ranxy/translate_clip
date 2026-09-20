@@ -669,6 +669,94 @@ async function checkClearCurrent(window: BrowserWindow): Promise<SelfCheckEntry>
   }
 }
 
+/**
+ * Records a shortcut through the settings recorder and checks the row agrees with the main process.
+ *
+ * Asserted on the rendered row rather than on the returned state, because that is where the bug was:
+ * the row rendered `bootstrap.shortcutState`, a snapshot taken when the window loaded its payload,
+ * so the first recording of a session displayed the *previous* outcome — "registration failed" for a
+ * shortcut that had just registered — until the window was reopened and fetched a fresh payload.
+ *
+ * The probe starts by clearing the shortcut and reloading the window, so the snapshot says "not
+ * registered" while the live state is about to say otherwise; without that the two can agree by luck
+ * and the check would prove nothing. Whether the combination actually registers is allowed either
+ * way — the assertion is agreement, so a machine that refuses it still passes while a stale row does
+ * not — and the user's own shortcut is put back at the end.
+ */
+async function checkShortcutRecording(window: BrowserWindow): Promise<SelfCheckEntry> {
+  const name = 'shortcut recording'
+
+  try {
+    await window.webContents.executeJavaScript(`window.translateClip.setShortcut('toggleOverlay', null)`)
+    window.webContents.reload()
+    await waitForMountedRoot(window)
+
+    const result = (await window.webContents.executeJavaScript(`(async () => {
+      const tab = document.querySelector('[data-settings-tab="shortcuts"]')
+      if (tab) tab.click()
+      await new Promise((resolve) => setTimeout(resolve, 400))
+
+      const recorder = document.querySelector('[data-shortcut-recorder="toggleOverlay"]')
+      if (!recorder) return { found: false }
+
+      recorder.click()
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      recorder.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'F9',
+          code: 'F9',
+          ctrlKey: true,
+          altKey: true,
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true
+        })
+      )
+      await new Promise((resolve) => setTimeout(resolve, 700))
+
+      const row = recorder.parentElement?.parentElement ?? null
+      const registered = (await window.translateClip.getBootstrapData()).shortcutState.toggleOverlay.registered
+      const showsRegistered = Boolean(row && row.querySelector('.text-ok'))
+      const showsFailed = Boolean(row && row.querySelector('.text-warn, .text-danger'))
+      const accelerator = (await window.translateClip.getBootstrapData()).config.shortcuts.toggleOverlay
+
+      await window.translateClip.setShortcut('toggleOverlay', null)
+
+      return { found: true, registered, showsRegistered, showsFailed, accelerator }
+    })()`)) as {
+      found: boolean
+      registered?: boolean
+      showsRegistered?: boolean
+      showsFailed?: boolean
+      accelerator?: string | null
+    }
+
+    if (!result.found) {
+      return { name, ok: false, detail: 'the settings window has no shortcut recorder' }
+    }
+
+    if (result.accelerator !== 'Control+Alt+Shift+F9') {
+      return { name, ok: false, detail: `the recorder stored ${String(result.accelerator)}` }
+    }
+
+    const agrees = result.registered === true
+      ? result.showsRegistered === true && result.showsFailed !== true
+      : result.showsFailed === true && result.showsRegistered !== true
+
+    const shown = result.showsRegistered ? 'registered' : result.showsFailed ? 'failed' : 'neither'
+
+    return {
+      name,
+      ok: agrees,
+      detail: agrees
+        ? `the row matched the registration (registered=${String(result.registered)}), and the shortcut was released again`
+        : `the row disagreed with the registration: registered=${String(result.registered)} but the row showed ${shown}`
+    }
+  } catch (error) {
+    return { name, ok: false, detail: (error as Error).message }
+  }
+}
+
 async function fileExists(path: string): Promise<boolean> {
   try {
     await access(path)
@@ -866,6 +954,9 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
         for (const tab of tabs) {
           push(tab.name, tab.ok, tab.detail)
         }
+
+        const recording = await checkShortcutRecording(window)
+        push(recording.name, recording.ok, recording.detail)
       }
 
       if (target.view === 'onboarding' && bridge === 'object' && root.children > 0) {
