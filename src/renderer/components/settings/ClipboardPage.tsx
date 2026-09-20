@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { APP_LIMITS, SUGGESTED_IGNORE_PATTERNS } from '@shared/constants'
@@ -26,6 +26,22 @@ export function ClipboardPage() {
   const store = useAppStore()
   const { config } = useAppState().bootstrap
   const [draftPattern, setDraftPattern] = useState('')
+  const [simulatedText, setSimulatedText] = useState('')
+  const [developerMode, setDeveloperMode] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    void window.translateClip.debugIsEnabled().then((enabled) => {
+      if (!cancelled) {
+        setDeveloperMode(enabled)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const draftValid = draftPattern.trim().length === 0 || isValidPattern(draftPattern.trim())
 
@@ -177,6 +193,31 @@ export function ClipboardPage() {
           />
         </Field>
       </Card>
+
+      {developerMode ? (
+        <Card data-settings-section="developer">
+          <CardHeader title={t('settings.clipboard.developer')} description={t('settings.clipboard.simulateHint')} />
+          <Field label={t('settings.clipboard.simulateLabel')} stacked htmlFor="simulate-clipboard">
+            <div className="flex items-center gap-2">
+              <TextInput
+                id="simulate-clipboard"
+                value={simulatedText}
+                placeholder={t('settings.clipboard.simulatePlaceholder')}
+                spellCheck={false}
+                onChange={(event) => setSimulatedText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && simulatedText.trim().length > 0) {
+                    void window.translateClip.debugInjectClipboard(simulatedText)
+                  }
+                }}
+              />
+              <Button size="sm" disabled={simulatedText.trim().length === 0} onClick={() => void window.translateClip.debugInjectClipboard(simulatedText)}>
+                {t('settings.clipboard.simulateAction')}
+              </Button>
+            </div>
+          </Field>
+        </Card>
+      ) : null}
     </>
   )
 }

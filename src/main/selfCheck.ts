@@ -651,6 +651,12 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
             "document.querySelectorAll('[data-settings-section=\"overlay\"] input[type=number]').length === 2",
             'the overlay appearance controls rendered'
           ),
+          await checkSettingsTab(
+            window,
+            'clipboard',
+            "Boolean(document.querySelector('[data-settings-section=\"developer\"]'))",
+            'the clipboard tab rendered, including the development-only clipboard simulator'
+          ),
           await checkSettingsTab(window, 'providers', "document.body.innerText.includes('DeepSeek')", 'the provider catalogue rendered'),
           await checkSettingsTab(
             window,

@@ -159,6 +159,11 @@ export const zhCN = {
       suggested: '常用规则',
       cache: '复用相同文本的译文',
       cacheHint: '24 小时内复制同一段文本直接使用上次译文,不消耗额度。',
+      developer: '开发者',
+      simulateLabel: '模拟剪贴板内容',
+      simulateHint: '直接走一遍采集管线（过滤 → 语言检测 → 翻译），不读也不写系统剪贴板。仅开发版可见。',
+      simulatePlaceholder: '粘贴一段文本，然后点注入',
+      simulateAction: '注入',
       debugLog: '记录 LLM 请求日志',
       debugLogHint: '将请求与响应写入日志目录,便于排查问题。'
     },

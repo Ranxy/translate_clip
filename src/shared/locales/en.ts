@@ -156,6 +156,11 @@ export const en: LocaleResource = {
       suggested: 'Common rules',
       cache: 'Reuse translations of identical text',
       cacheHint: 'The same text copied within 24 hours reuses the previous translation for free.',
+      developer: 'Developer',
+      simulateLabel: 'Simulate clipboard content',
+      simulateHint: 'Runs the real capture pipeline (filter → language detection → translation) without reading or writing the system clipboard. Development builds only.',
+      simulatePlaceholder: 'Paste some text, then inject',
+      simulateAction: 'Inject',
       debugLog: 'Log LLM requests',
       debugLogHint: 'Writes requests and responses to the log folder for troubleshooting.'
     },
