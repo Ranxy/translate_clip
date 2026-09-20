@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import type { BootstrapPayload } from '@shared/types'
 
 import { OnboardingShell } from './components/onboarding/OnboardingShell'
+import { ErrorToastHost } from './components/ui/ErrorToast'
 import { OverlayShell } from './components/overlay/OverlayShell'
 import { SettingsShell } from './components/settings/SettingsShell'
 import { AppStore, AppStoreProvider } from './store/appStore'
@@ -30,6 +31,7 @@ export function App({ bootstrap }: AppProps) {
   return (
     <AppStoreProvider store={store}>
       {view === 'settings' ? <SettingsShell /> : view === 'onboarding' ? <OnboardingShell /> : <OverlayShell />}
+      <ErrorToastHost store={store} />
     </AppStoreProvider>
   )
 }

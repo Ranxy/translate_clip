@@ -196,6 +196,49 @@ async function checkOverlayScaling(window: BrowserWindow, log: Logger): Promise<
   }
 }
 
+/**
+ * Proves a rejected IPC call becomes visible rather than silent.
+ *
+ * `history:copyTranslation` throws for an entry that has no translation, which is a
+ * convenient real failure: the renderer fires it fire-and-forget, so before the error
+ * surface existed it produced nothing but an unhandled rejection.
+ */
+async function checkErrorSurface(window: BrowserWindow): Promise<SelfCheckEntry> {
+  const name = 'error surface'
+  const probeMessage = 'self-check error surface probe'
+
+  try {
+    const appeared: boolean = await window.webContents.executeJavaScript(`(async () => {
+      // Dismiss anything already on screen first: an earlier failure in this run would
+      // otherwise be mistaken for this one, since a toast lives for eight seconds.
+      const dismiss = document.querySelector('[data-error-toast] button')
+      if (dismiss) {
+        dismiss.click()
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+
+      Promise.reject(new Error(${JSON.stringify(probeMessage)}))
+
+      const deadline = Date.now() + 4000
+      while (Date.now() < deadline) {
+        const toast = document.querySelector('[data-error-toast]')
+        if (toast && (toast.textContent || '').includes(${JSON.stringify(probeMessage)})) return true
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+
+      return false
+    })()`)
+
+    return {
+      name,
+      ok: appeared,
+      detail: appeared ? 'a rejected renderer call surfaced as a visible error' : 'the rejection was swallowed'
+    }
+  } catch (error) {
+    return { name, ok: false, detail: (error as Error).message }
+  }
+}
+
 /** Switches the overlay to its history tab and reports how many entries rendered. */
 async function countHistoryItems(window: BrowserWindow): Promise<number> {
   await window.webContents.executeJavaScript(
@@ -543,6 +586,9 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
 
         const scaling = await checkOverlayScaling(window, options.log)
         push(scaling.name, scaling.ok, scaling.detail)
+
+        const errorSurface = await checkErrorSurface(window)
+        push(errorSurface.name, errorSurface.ok, errorSurface.detail)
       }
 
       if (target.view === 'settings' && bridge === 'object' && root.children > 0) {

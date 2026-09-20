@@ -20,6 +20,8 @@ export const zhCN = {
     copy: '复制',
     copied: '已复制',
     retry: '重试',
+    errorTitle: '出错了',
+    dismiss: '知道了',
     loading: '加载中…',
     planned: '计划中',
     reset: '恢复默认'

@@ -25,6 +25,8 @@ export interface AppStoreState {
   clipboardStatus: ClipboardStatus
   clipboardActivity: ClipboardActivity | null
   recentHistory: TranslationRecord[]
+  /** Last failure surfaced to the user, if any. */
+  error: string | null
 }
 
 type Listener = () => void
@@ -49,7 +51,8 @@ export class AppStore {
       shortcutState: bootstrap.shortcutState,
       clipboardStatus: bootstrap.clipboardStatus,
       clipboardActivity: null,
-      recentHistory: bootstrap.recentHistory
+      recentHistory: bootstrap.recentHistory,
+      error: null
     }
 
     this.attach()
@@ -100,6 +103,14 @@ export class AppStore {
 
   async listHistory(query: HistoryQuery): Promise<HistoryPage> {
     return window.translateClip.listHistory(query)
+  }
+
+  reportError(message: string): void {
+    this.setState({ error: message })
+  }
+
+  dismissError(): void {
+    this.setState({ error: null })
   }
 
   /** Applies a bootstrap payload returned by a mutating IPC call. */

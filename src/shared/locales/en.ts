@@ -17,6 +17,8 @@ export const en: LocaleResource = {
     copy: 'Copy',
     copied: 'Copied',
     retry: 'Retry',
+    errorTitle: 'Something went wrong',
+    dismiss: 'Dismiss',
     loading: 'Loading…',
     planned: 'Planned',
     reset: 'Reset to default'
