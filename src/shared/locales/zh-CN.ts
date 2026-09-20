@@ -32,6 +32,7 @@ export const zhCN = {
     emptyBody: '在其他应用里按 Ctrl+C,译文会自动出现在这里。',
     sourceLabel: '原文',
     translationLabel: '译文',
+    cached: '缓存',
     tabCurrent: '当前',
     tabHistory: '历史',
     actionTranslateNow: '立即翻译剪贴板',

@@ -64,7 +64,7 @@ function CurrentPanel() {
       <section className="flex min-h-0 flex-1 flex-col">
         <header className="mb-1 flex items-center justify-between">
           <span className="text-[10.5px] uppercase tracking-wide text-faint">{t('overlay.translationLabel')}</span>
-          {translationState.cached ? <Badge tone="accent">{t('common.saved')}</Badge> : null}
+          {translationState.cached ? <Badge tone="accent">{t('overlay.cached')}</Badge> : null}
         </header>
 
         {!configured ? (

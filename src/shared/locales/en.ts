@@ -29,6 +29,7 @@ export const en: LocaleResource = {
     emptyBody: 'Press Ctrl+C in any application and the translation shows up here.',
     sourceLabel: 'Original',
     translationLabel: 'Translation',
+    cached: 'Cached',
     tabCurrent: 'Current',
     tabHistory: 'History',
     actionTranslateNow: 'Translate clipboard now',
