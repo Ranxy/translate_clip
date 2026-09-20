@@ -208,10 +208,39 @@ export const zhCN = {
     }
   },
   onboarding: {
-    planned: '初始向导将在下一步实现。届时会在这里选择翻译方向与翻译服务。',
     title: '欢迎使用剪译',
+    subtitle: '两步就能开始:确定翻译方向,接入翻译服务。',
     skip: '跳过',
-    finish: '完成'
+    finish: '完成',
+    next: '下一步',
+    back: '上一步',
+    stepLabel: '第 {{current}} / {{total}} 步',
+    directionTitle: '翻译方向',
+    directionBody: '决定什么内容被翻译成什么语言。之后随时可以在设置里修改。',
+    target: '翻译成',
+    fallback: '源文已经是目标语言时,翻译成',
+    mode: '方向策略',
+    modeAuto: '智能互译（推荐）',
+    modeFixed: '固定方向',
+    modeHintAuto: '源文已是目标语言时自动反向翻译。',
+    modeHintFixed: '始终翻译为上面选择的目标语言。',
+    directionConflict: '目标语言与回落语言不能相同。',
+    previewTitle: '效果预览',
+    previewToTarget: '其它语言 → {{target}}',
+    previewReversed: '{{target}} → {{fallback}}',
+    providerTitle: '接入翻译服务',
+    providerBody: '现在配置或稍后配置都可以；只有配置之后复制才会产生译文。',
+    providerSkipHint: '可以「下一步」跳过，之后在 设置 → 翻译服务 里添加。',
+    clipboardTitle: '剪贴板与隐私',
+    clipboardBody: '剪译只在你复制时工作，内容会发送给你自己配置的翻译服务。',
+    clipboardWatch: '启动后立即开始监听剪贴板',
+    clipboardSkipToken: '跳过单个词或纯数字',
+    clipboardMaxChars: '超过该长度的内容不翻译',
+    privacyNote: '隐私提醒：被接受的复制内容都会发送到你配置的 LLM 服务；可随时用全局开关暂停监听。',
+    integrationTitle: '系统集成',
+    integrationBody: '可选，之后都能在设置里改。',
+    shortcutsNote: '默认不注册任何全局快捷键；浮层按钮与托盘菜单已覆盖全部操作。',
+    readyNote: '完成后浮层会一直待命，复制任意文本即可翻译。'
   }
 }
 

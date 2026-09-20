@@ -118,8 +118,7 @@ describe('TranslationQueue', () => {
 
     const queue = createQueue()
     queue.submit(job('first copy'))
-    await waitFor(() => states.some((state) => state.phase === 'translating'))
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await waitFor(() => server.requests.length === 1)
 
     queue.submit(job('second copy'))
     await waitFor(() => states.at(-1)?.phase === 'done')

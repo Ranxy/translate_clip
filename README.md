@@ -49,8 +49,9 @@ environment; macOS support is planned but not implemented.
 The settings window's **About** tab shows the exact path and can open it.
 
 `--self-check` temporarily saves a provider profile pointing at a loopback stub server,
-and deletes it — together with the sample translation — when it finishes. It never uses
-or modifies a real provider profile, and it does not start clipboard watching.
+deletes it (with the sample translation) when it finishes, and walks the first-run
+wizard — which re-saves the direction settings unchanged. It never uses or modifies a
+real provider profile, and it does not start clipboard watching.
 
 ## Notes for development on WSL
 

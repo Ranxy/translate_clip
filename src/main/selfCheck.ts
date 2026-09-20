@@ -40,6 +40,75 @@ const VIEWS: SelfCheckTarget[] = [
 const PIPELINE_SAMPLE_TEXT = 'Hello clipboard pipeline'
 const TRANSLATION_MARKER = 'self-check translation marker'
 
+/** Provider brand names, so the assertion does not depend on the UI language. */
+const PROVIDER_MARKER = 'DeepSeek'
+
+/**
+ * Exercises the first-run wizard for real: it walks forward to the provider step
+ * and back again, asserting the content actually changed.
+ *
+ * The wizard is the one screen a new user cannot avoid, so "it mounts" is not
+ * enough — a broken step transition would leave them stuck on a blank step.
+ */
+async function checkOnboardingFlow(window: BrowserWindow, log: Logger): Promise<SelfCheckEntry> {
+  const name = 'onboarding wizard'
+
+  const click = (action: string) =>
+    window.webContents.executeJavaScript(
+      `(() => { const button = document.querySelector('[data-action="${action}"]'); if (!button) return false; button.click(); return true })()`
+    )
+
+  const readBody = () => window.webContents.executeJavaScript('document.body.innerText')
+
+  const waitForBody = async (predicate: (text: string) => boolean, timeoutMs = 4_000): Promise<string> => {
+    const deadline = Date.now() + timeoutMs
+    let body = ''
+
+    for (;;) {
+      body = await readBody()
+
+      if (predicate(body) || Date.now() > deadline) {
+        return body
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+  }
+
+  try {
+    const steps = await window.webContents.executeJavaScript('document.querySelectorAll("[data-step]").length')
+
+    if (steps !== 4) {
+      return { name, ok: false, detail: `expected 4 wizard steps, found ${steps}` }
+    }
+
+    if (!(await click('next'))) {
+      return { name, ok: false, detail: 'the "next" button is missing on the first step' }
+    }
+
+    const providerBody = await waitForBody((text) => text.includes(PROVIDER_MARKER))
+
+    if (!providerBody.includes(PROVIDER_MARKER)) {
+      log.warn(`self-check provider body text: ${providerBody.slice(0, 200)}`)
+      return { name, ok: false, detail: 'the provider step did not render the provider list' }
+    }
+
+    if (!(await click('back'))) {
+      return { name, ok: false, detail: 'the "back" button is missing on the provider step' }
+    }
+
+    const directionBody = await waitForBody((text) => !text.includes(PROVIDER_MARKER))
+
+    if (directionBody.includes(PROVIDER_MARKER)) {
+      return { name, ok: false, detail: 'the wizard did not navigate back to the direction step' }
+    }
+
+    return { name, ok: true, detail: 'four steps present; direction ⇄ provider navigation works' }
+  } catch (error) {
+    return { name, ok: false, detail: (error as Error).message }
+  }
+}
+
 interface BootstrapShape {
   llmProviderState?: { profiles?: Array<{ profileId: string }>; activeProfileId?: string | null }
 }
@@ -303,6 +372,11 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
 
         const translation = await checkTranslationFlow(window, options.log)
         push(translation.name, translation.ok, translation.detail)
+      }
+
+      if (target.view === 'onboarding' && bridge === 'object' && root.children > 0) {
+        const wizard = await checkOnboardingFlow(window, options.log)
+        push(wizard.name, wizard.ok, wizard.detail)
       }
     } catch (error) {
       push(target.label, false, (error as Error).message)
