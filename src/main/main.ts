@@ -159,7 +159,10 @@ class TranslateClipApp {
       getConfig: () => this.config,
       log: this.logger,
       shouldKeepRunningInTray: () => this.config.closeToTray && this.capabilities.get().tray,
-      isQuitting: () => this.quitting
+      isQuitting: () => this.quitting,
+      // The tray's first entry says "hide overlay" or "show overlay" depending on the overlay's
+      // visibility, and the overlay is hidden from more than the tray.
+      onOverlayVisibilityChanged: () => this.tray.refresh()
     })
 
     this.shortcutManager = new ShortcutManager({

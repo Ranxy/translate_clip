@@ -134,6 +134,13 @@ export class TrayController {
     ]
 
     this.tray.setContextMenu(Menu.buildFromTemplate(template))
+
+    // Electron keeps a tray's menu private, so this line is also the only way to see what the user
+    // will be shown when the entry that reads "hide overlay" / "show overlay" goes stale.
+    this.options.log.debug('tray menu rebuilt', {
+      overlayVisible: this.options.isOverlayVisible(),
+      firstEntry: template[0]?.label ?? null
+    })
   }
 
   isAvailable(): boolean {

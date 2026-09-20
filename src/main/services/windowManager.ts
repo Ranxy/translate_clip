@@ -61,6 +61,14 @@ export interface WindowManagerOptions {
   shouldKeepRunningInTray: () => boolean
   /** True once a real quit is in progress, so close handlers stop intercepting. */
   isQuitting: () => boolean
+  /**
+   * Fired whenever the overlay is shown or hidden, from the window's own events.
+   *
+   * The tray's first menu entry reads "hide" or "show" depending on this, and the overlay can be
+   * hidden from several places — its own ✕, the tray, the failure notification, the close-to-tray
+   * handler — so the listeners live here rather than at each call site.
+   */
+  onOverlayVisibilityChanged?: () => void
 }
 
 function isSafeExternalUrl(url: string): boolean {
@@ -168,6 +176,11 @@ export class WindowManager {
     this.installLinkHandler(window)
     this.installRendererDiagnostics(window, 'overlay')
     this.installWindowStatePersistence(window, 'overlay')
+
+    // Every path that shows or hides the overlay ends up here, which is what keeps the tray's
+    // "hide overlay" / "show overlay" entry honest.
+    window.on('show', () => this.options.onOverlayVisibilityChanged?.())
+    window.on('hide', () => this.options.onOverlayVisibilityChanged?.())
 
     window.on('close', (event) => {
       if (this.options.isQuitting()) {
