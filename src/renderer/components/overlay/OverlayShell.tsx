@@ -208,6 +208,7 @@ export function OverlayShell() {
               <button
                 key={value}
                 type="button"
+                data-tab={value}
                 onClick={() => setTab(value)}
                 className={cn(
                   'rounded-md px-2 py-1 text-[11.5px] transition-colors',

@@ -45,6 +45,20 @@ export const en: LocaleResource = {
     clickThroughHint: 'Click-through is on: turn it off from the tray menu.',
     phasePlanned: 'Clipboard watching is live; LLM translation lands in the next step.',
     historyEmpty: 'No history yet',
+    history: {
+      search: 'Search source or translation',
+      emptySearch: 'No matching entries',
+      loadMore: 'Load more',
+      clear: 'Clear history',
+      clearConfirm: 'Clear the history? Pinned entries are kept.',
+      copy: 'Copy translation',
+      pin: 'Pin',
+      unpin: 'Unpin',
+      delete: 'Delete',
+      cached: 'cached',
+      failed: 'failed',
+      showPinnedOnly: 'Pinned only'
+    },
     phase: {
       idle: 'Idle',
       translating: 'Translating',
@@ -176,7 +190,22 @@ export const en: LocaleResource = {
       }
     },
     prompt: {
-      planned: 'The prompt editor is planned for phase 2.'
+      description: 'The prompt decides how the model translates. Clearing it restores the default template.',
+      template: 'System prompt',
+      variables: 'Available variables',
+      variableTarget: '{{targetLanguage}} — the target language',
+      variableSource: '{{sourceLanguage}} — the detected source language (auto-detected when unknown)',
+      reset: 'Restore default',
+      preview: 'Final prompt preview',
+      previewHint: 'Renders the exact prompt sent to the model, including any matched glossary terms.',
+      sampleText: 'Sample text',
+      parameters: 'Request parameters',
+      temperature: 'Temperature',
+      temperatureHint: 'Lower is steadier; 0–0.3 is right for translation.',
+      timeout: 'Timeout (ms)',
+      retries: 'Retries on failure',
+      retriesHint: 'Only rate limits, timeouts and server errors are retried; a request superseded by a newer copy is not.',
+      responseContract: 'The response format is appended by the app (detectedLanguage and translatedText); no need to repeat it here.'
     },
     glossary: {
       planned: 'The glossary editor is planned for phase 2.'

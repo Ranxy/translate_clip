@@ -48,6 +48,20 @@ export const zhCN = {
     clickThroughHint: '鼠标穿透已开启:请从托盘菜单关闭。',
     phasePlanned: '剪贴板监听已经生效,LLM 翻译将在下一步接入。',
     historyEmpty: '暂无历史记录',
+    history: {
+      search: '搜索原文或译文',
+      emptySearch: '没有匹配的记录',
+      loadMore: '加载更多',
+      clear: '清空历史',
+      clearConfirm: '确定清空历史？已收藏的记录会保留。',
+      copy: '复制译文',
+      pin: '收藏',
+      unpin: '取消收藏',
+      delete: '删除',
+      cached: '缓存',
+      failed: '失败',
+      showPinnedOnly: '只看收藏'
+    },
     phase: {
       idle: '空闲',
       translating: '翻译中',
@@ -179,7 +193,22 @@ export const zhCN = {
       }
     },
     prompt: {
-      planned: '提示词编辑页计划在第二阶段实现。'
+      description: '提示词决定模型如何翻译。清空会回到默认模板。',
+      template: '系统提示词',
+      variables: '可用变量',
+      variableTarget: '{{targetLanguage}} — 目标语言',
+      variableSource: '{{sourceLanguage}} — 识别出的源语言（识别不出时为 auto-detected）',
+      reset: '恢复默认',
+      preview: '最终提示词预览',
+      previewHint: '用下面的示例文本渲染真实发送给模型的提示词，包含命中的术语。',
+      sampleText: '示例文本',
+      parameters: '请求参数',
+      temperature: '随机度（temperature）',
+      temperatureHint: '越低越稳定，翻译推荐 0~0.3。',
+      timeout: '超时（毫秒）',
+      retries: '失败重试次数',
+      retriesHint: '仅对限流、超时、服务端错误重试；被新复制取代的请求不会重试。',
+      responseContract: '响应格式由程序追加（要求返回 detectedLanguage 与 translatedText），无需在此重复。'
     },
     glossary: {
       planned: '术语表编辑页计划在第二阶段实现。'

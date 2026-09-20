@@ -113,6 +113,65 @@ interface BootstrapShape {
   llmProviderState?: { profiles?: Array<{ profileId: string }>; activeProfileId?: string | null }
 }
 
+/** Switches the overlay to its history tab and reports how many entries rendered. */
+async function countHistoryItems(window: BrowserWindow): Promise<number> {
+  await window.webContents.executeJavaScript(
+    `(() => { const tab = document.querySelector('[data-tab="history"]'); if (tab) tab.click(); return Boolean(tab) })()`
+  )
+
+  const deadline = Date.now() + 5_000
+
+  for (;;) {
+    const count: number = await window.webContents.executeJavaScript('document.querySelectorAll("[data-history-item]").length')
+
+    if (count > 0 || Date.now() > deadline) {
+      return count
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
+/**
+ * Opens the prompt tab and asserts the live preview rendered.
+ *
+ * The preview is produced by the main process (real detection, real prompt
+ * assembly), so this also proves that IPC path end to end.
+ */
+async function checkPromptPreview(window: BrowserWindow, log: Logger): Promise<SelfCheckEntry> {
+  const name = 'prompt preview'
+
+  try {
+    const clicked = await window.webContents.executeJavaScript(
+      `(() => { const tab = document.querySelector('[data-settings-tab="prompt"]'); if (!tab) return false; tab.click(); return true })()`
+    )
+
+    if (!clicked) {
+      return { name, ok: false, detail: 'the prompt tab is missing from the settings window' }
+    }
+
+    const deadline = Date.now() + 5_000
+    let body = ''
+
+    for (;;) {
+      body = await window.webContents.executeJavaScript('document.body.innerText')
+
+      if (body.includes('detectedLanguage')) {
+        return { name, ok: true, detail: 'the prompt tab rendered the live preview from the main process' }
+      }
+
+      if (Date.now() > deadline) {
+        log.warn(`self-check prompt body text: ${body.slice(0, 200)}`)
+        return { name, ok: false, detail: 'the prompt preview never rendered' }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+  } catch (error) {
+    return { name, ok: false, detail: (error as Error).message }
+  }
+}
+
 /**
  * Proves the whole translation path without a credential or a network call.
  *
@@ -183,10 +242,16 @@ async function checkTranslationFlow(window: BrowserWindow, log: Logger): Promise
           return { name, ok: false, detail: 'the overlay showed a translation without the provider being called' }
         }
 
+        const historyItems = await countHistoryItems(window)
+
+        if (historyItems === 0) {
+          return { name, ok: false, detail: 'the finished translation never appeared in the history panel' }
+        }
+
         return {
           name,
           ok: true,
-          detail: `stubbed provider answered after ${server.requests.length} request(s); the overlay rendered the translation`
+          detail: `stubbed provider answered after ${server.requests.length} request(s); the overlay rendered the translation and listed it in history`
         }
       }
 
@@ -372,6 +437,11 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
 
         const translation = await checkTranslationFlow(window, options.log)
         push(translation.name, translation.ok, translation.detail)
+      }
+
+      if (target.view === 'settings' && bridge === 'object' && root.children > 0) {
+        const prompt = await checkPromptPreview(window, options.log)
+        push(prompt.name, prompt.ok, prompt.detail)
       }
 
       if (target.view === 'onboarding' && bridge === 'object' && root.children > 0) {

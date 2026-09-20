@@ -11,6 +11,7 @@ import type {
   LlmConnectionTestInput,
   LlmConnectionTestResult,
   LlmProviderModel,
+  PromptPreviewInput,
   RendererEventMap,
   SaveLlmProviderProfileInput,
   ShortcutAction,
@@ -69,6 +70,8 @@ const api: TranslateClipApi = {
   deleteGlossaryEntry: (id: string) => ipcRenderer.invoke('glossary:delete', id),
   importGlossary: (json: string) => ipcRenderer.invoke('glossary:import', json),
   exportGlossary: () => ipcRenderer.invoke('glossary:export'),
+
+  previewPrompt: (input: PromptPreviewInput): Promise<string> => ipcRenderer.invoke('prompt:preview', input),
 
   setShortcut: (action: ShortcutAction, accelerator: string | null) =>
     ipcRenderer.invoke('shortcut:set', action, accelerator),

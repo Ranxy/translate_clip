@@ -174,6 +174,12 @@ export interface TranslationState {
   cached: boolean
 }
 
+export interface PromptPreviewInput {
+  text: string
+  /** Overrides the saved template so the preview can follow unsaved edits. */
+  translationPrompt?: string
+}
+
 export interface HistoryQuery {
   query?: string
   cursor?: string | null
@@ -363,6 +369,9 @@ export interface TranslateClipApi {
   deleteGlossaryEntry: (id: string) => Promise<BootstrapPayload>
   importGlossary: (json: string) => Promise<BootstrapPayload>
   exportGlossary: () => Promise<string>
+
+  /** Renders the real system prompt for a sample text, including glossary matches. */
+  previewPrompt: (input: PromptPreviewInput) => Promise<string>
 
   setShortcut: (action: ShortcutAction, accelerator: string | null) => Promise<{ ok: boolean; error: string | null }>
   testShortcut: (accelerator: string) => Promise<{ ok: boolean; error: string | null }>

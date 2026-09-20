@@ -7,6 +7,7 @@ import { AboutPage } from './AboutPage'
 import { ClipboardPage } from './ClipboardPage'
 import { GeneralPage } from './GeneralPage'
 import { PlannedPage } from './PlannedPage'
+import { PromptPage } from './PromptPage'
 import { ProvidersPage } from './ProvidersPage'
 
 type SettingsTab = 'general' | 'clipboard' | 'providers' | 'prompt' | 'glossary' | 'shortcuts' | 'about'
@@ -28,6 +29,7 @@ export function SettingsShell() {
             <button
               key={value}
               type="button"
+              data-settings-tab={value}
               onClick={() => setTab(value)}
               className={cn(
                 'rounded-lg px-2.5 py-1.5 text-left text-[12.5px] transition-colors',
@@ -51,7 +53,7 @@ export function SettingsShell() {
           {tab === 'general' ? <GeneralPage /> : null}
           {tab === 'clipboard' ? <ClipboardPage /> : null}
           {tab === 'providers' ? <ProvidersPage /> : null}
-          {tab === 'prompt' ? <PlannedPage messageKey="settings.prompt.planned" /> : null}
+          {tab === 'prompt' ? <PromptPage /> : null}
           {tab === 'glossary' ? <PlannedPage messageKey="settings.glossary.planned" /> : null}
           {tab === 'shortcuts' ? <PlannedPage messageKey="settings.shortcuts.planned" /> : null}
           {tab === 'about' ? <AboutPage /> : null}

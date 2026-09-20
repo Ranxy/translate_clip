@@ -18,6 +18,7 @@ import type {
   LlmConnectionTestResult,
   LlmProviderId,
   LlmProviderState,
+  PromptPreviewInput,
   SaveLlmProviderProfileInput,
   ShortcutAction,
   ShortcutState,
@@ -423,6 +424,16 @@ class TranslateClipApp {
   private setTranslationState(next: TranslationState): void {
     this.translationState = next
     this.windowManager.broadcast('translation:state', next)
+
+    // A finished job is a new history row: push it so an open history list updates
+    // without polling.
+    if (next.historyId && (next.phase === 'done' || next.phase === 'error')) {
+      const record = this.history.getById(next.historyId)
+
+      if (record) {
+        this.windowManager.broadcast('history:update', record)
+      }
+    }
   }
 
   private getFilterContext(): FilterContext {
@@ -661,6 +672,25 @@ class TranslateClipApp {
         this.updateConfig({ glossary: this.configStore.getConfig().glossary.filter((entry) => entry.id !== id) }),
       'glossary:import': (json: string) => this.importGlossary(json),
       'glossary:export': () => JSON.stringify(this.configStore.getConfig().glossary, null, 2),
+
+      'prompt:preview': (input: PromptPreviewInput): string => {
+        // Routes through the real detection and prompt assembly, so the preview can
+        // never drift from what is actually sent. The template may be overridden so
+        // the preview follows unsaved edits.
+        const text = input.text
+        const detection = detectLanguage(text)
+        const direction = resolveDirection(detection, {
+          directionMode: this.config.directionMode,
+          targetLanguage: this.config.targetLanguage,
+          fallbackLanguage: this.config.fallbackLanguage
+        })
+
+        return buildSystemPrompt(
+          { ...this.config, translationPrompt: input.translationPrompt?.trim() || DEFAULT_CONFIG.translationPrompt },
+          direction,
+          text
+        )
+      },
 
       'shortcut:set': async (action: ShortcutAction, accelerator: string | null) => {
         const result = this.shortcutManager.set(action, accelerator)
