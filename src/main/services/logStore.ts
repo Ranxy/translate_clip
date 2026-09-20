@@ -79,12 +79,12 @@ export function createLogger(filePath: string, level: LogLevel = 'info'): Logger
       // Never let logging break the app.
     }
 
-    if (!process.env.ELECTRON_RENDERER_URL) {
-      try {
-        process.stdout.write(line)
-      } catch {
-        // No attached console (packaged Windows GUI build) — the file is enough.
-      }
+    try {
+      // Always mirrored to stdout: in a development run that is where the user is
+      // looking, and a packaged Windows GUI build simply has no console to reach.
+      process.stdout.write(line)
+    } catch {
+      // No attached console — the file is enough.
     }
   }
 

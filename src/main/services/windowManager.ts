@@ -217,10 +217,21 @@ export class WindowManager {
     window.setBounds({ ...bounds, height: nextHeight })
   }
 
-  /** Re-applies every config-driven overlay behaviour; called after each config change. */
-  applyOverlayBehaviour(config: AppConfig): void {
-    this.setOverlayOpacity(config.overlay.opacity)
-    this.setOverlayClickThrough(config.overlay.clickThrough)
+  /**
+   * Re-applies config-driven overlay behaviour.
+   *
+   * `previous` is omitted when a window is first created and everything must be applied;
+   * afterwards only real changes are pushed to the OS, since both calls touch the native
+   * window.
+   */
+  applyOverlayBehaviour(config: AppConfig, previous?: AppConfig): void {
+    if (!previous || previous.overlay.opacity !== config.overlay.opacity) {
+      this.setOverlayOpacity(config.overlay.opacity)
+    }
+
+    if (!previous || previous.overlay.clickThrough !== config.overlay.clickThrough) {
+      this.setOverlayClickThrough(config.overlay.clickThrough)
+    }
   }
 
   /* ── Settings ────────────────────────────────────────────────────── */

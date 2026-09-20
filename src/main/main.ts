@@ -275,7 +275,7 @@ class TranslateClipApp {
 
     this.logger.setLevel(next.logLevel)
 
-    if (next.uiLanguage !== previous.uiLanguage || next.uiLanguage === 'system') {
+    if (next.uiLanguage !== previous.uiLanguage) {
       this.translator = createTranslator(resolveUiLanguage(next))
     }
 
@@ -283,9 +283,12 @@ class TranslateClipApp {
       nativeTheme.themeSource = next.theme
     }
 
-    this.windowManager.applyOverlayBehaviour(next)
+    this.windowManager.applyOverlayBehaviour(next, previous)
 
-    if (next.ignorePatterns !== previous.ignorePatterns) {
+    // Value comparisons, not references: sanitizeConfig rebuilds every array and object
+    // on each write, so `!==` on them is always true and the work below would run on
+    // every unrelated settings change.
+    if (next.ignorePatterns.join('\n') !== previous.ignorePatterns.join('\n')) {
       this.ignorePatterns = compileIgnorePatterns(next.ignorePatterns)
     }
 
@@ -305,7 +308,13 @@ class TranslateClipApp {
       this.windowManager.setOverlayCollapsed(next.overlay.collapsed)
     }
 
-    if (next.shortcuts !== previous.shortcuts) {
+    if (
+      next.shortcuts.toggleOverlay !== previous.shortcuts.toggleOverlay ||
+      next.shortcuts.translateClipboard !== previous.shortcuts.translateClipboard
+    ) {
+      // Re-applying releases and re-acquires the global shortcuts, so doing it while the
+      // user changes an unrelated setting risks losing a working combination to whatever
+      // grabs it in that instant.
       this.windowManager.broadcast('shortcut:state', this.shortcutManager.apply(next.shortcuts))
     }
 

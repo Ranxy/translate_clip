@@ -239,6 +239,54 @@ async function checkErrorSurface(window: BrowserWindow): Promise<SelfCheckEntry>
   }
 }
 
+/**
+ * Guards against work being done on every config write.
+ *
+ * `sanitizeConfig` rebuilds arrays and objects each time, so comparing them by
+ * reference makes the condition always true. For the global shortcuts that is not just
+ * wasted work: re-applying them releases and re-acquires the keys, so an unrelated
+ * settings change could lose a working combination to whatever grabs it in that instant.
+ */
+async function checkConfigChurn(window: BrowserWindow): Promise<SelfCheckEntry> {
+  const name = 'config churn'
+
+  try {
+    const bootstrap = (await window.webContents.executeJavaScript('window.translateClip.getBootstrapData()')) as {
+      config?: { historyLimit?: number }
+    }
+    const historyLimit = bootstrap.config?.historyLimit
+
+    if (typeof historyLimit !== 'number') {
+      return { name, ok: false, detail: 'the bootstrap payload had no history limit' }
+    }
+
+    // Writes the value it already has. A real change is not needed: the bug this guards
+    // against was a reference comparison, which fires whether or not the value differs —
+    // and writing the same value keeps the probe free of side effects on user data.
+    const shortcutEvents: number = await window.webContents.executeJavaScript(`(async () => {
+      let events = 0
+      const off = window.translateClip.on('shortcut:state', () => { events += 1 })
+
+      await window.translateClip.updateConfig({ historyLimit: ${historyLimit} })
+      await new Promise((resolve) => setTimeout(resolve, 250))
+
+      off()
+      return events
+    })()`)
+
+    return {
+      name,
+      ok: shortcutEvents === 0,
+      detail:
+        shortcutEvents === 0
+          ? 'a config write with unchanged values left the global shortcuts alone'
+          : `the shortcuts were re-applied ${shortcutEvents} time(s) by an unchanged config write`
+    }
+  } catch (error) {
+    return { name, ok: false, detail: (error as Error).message }
+  }
+}
+
 /** Switches the overlay to its history tab and reports how many entries rendered. */
 async function countHistoryItems(window: BrowserWindow): Promise<number> {
   await window.webContents.executeJavaScript(
@@ -589,6 +637,9 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
 
         const errorSurface = await checkErrorSurface(window)
         push(errorSurface.name, errorSurface.ok, errorSurface.detail)
+
+        const churn = await checkConfigChurn(window)
+        push(churn.name, churn.ok, churn.detail)
       }
 
       if (target.view === 'settings' && bridge === 'object' && root.children > 0) {
