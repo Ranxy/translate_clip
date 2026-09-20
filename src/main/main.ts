@@ -401,7 +401,11 @@ class TranslateClipApp {
       return
     }
 
-    const result = filterClipboardText(text, this.getFilterContext(), this.lastAcceptedHash)
+    // An explicit "translate clipboard now" is not compared against the text we last accepted: the
+    // user asked about *this* clipboard, and the answer is a cache hit they can see again after
+    // clearing the view. Automatic watching keeps the guard, where a repeat really is noise.
+    const since = source === 'manual' ? null : this.lastAcceptedHash
+    const result = filterClipboardText(text, this.getFilterContext(), since)
 
     if (!result.accepted) {
       this.publishClipboardActivity({
