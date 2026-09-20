@@ -36,6 +36,9 @@ jobs:
 
       - name: End-to-end self-check
         # Needs a display; xvfb provides one so the GUI checks really run here.
+        # Unlike the Windows job this is a hard gate, because a virtual display makes
+        # the GUI path deterministic. If a runner image ever lacks the Electron
+        # runtime libraries, relax this step the same way build-windows.yml does.
         run: xvfb-run --auto-servernum npm run self-check
 
       - name: Build AppImage and deb
