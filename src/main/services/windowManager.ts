@@ -249,8 +249,11 @@ export class WindowManager {
 
       existing.show()
       existing.focus()
+      this.options.log.debug('settings window brought to the front')
       return
     }
+
+    this.options.log.info('settings window opened')
 
     const saved = this.options.windowStateStore.getWindowState('settings')
     const window = new BrowserWindow({

@@ -986,9 +986,11 @@ if (!hasSingleInstanceLock) {
   }
 } else {
   app.on('second-instance', (_event, argv) => {
-    // An autostart launch of a second instance must not pop the settings window at
-    // login; a user-initiated launch (clicking the icon again) should.
-    translateClip.focusPrimaryWindow({ silent: argv.includes('--hidden') })
+    // Only a user-initiated launch (clicking the icon again) should surface the app.
+    // `--hidden` is the autostart path, and `--self-check` is a diagnostic run: neither
+    // should pop a window in the instance that already owns the lock.
+    const silent = argv.includes('--hidden') || argv.includes('--self-check')
+    translateClip.focusPrimaryWindow({ silent })
   })
 
   app.whenReady().then(async () => {
