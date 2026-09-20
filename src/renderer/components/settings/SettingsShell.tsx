@@ -6,9 +6,10 @@ import { cn } from '../../utils/cn'
 import { AboutPage } from './AboutPage'
 import { ClipboardPage } from './ClipboardPage'
 import { GeneralPage } from './GeneralPage'
-import { PlannedPage } from './PlannedPage'
+import { GlossaryPage } from './GlossaryPage'
 import { PromptPage } from './PromptPage'
 import { ProvidersPage } from './ProvidersPage'
+import { ShortcutsPage } from './ShortcutsPage'
 
 type SettingsTab = 'general' | 'clipboard' | 'providers' | 'prompt' | 'glossary' | 'shortcuts' | 'about'
 
@@ -54,8 +55,8 @@ export function SettingsShell() {
           {tab === 'clipboard' ? <ClipboardPage /> : null}
           {tab === 'providers' ? <ProvidersPage /> : null}
           {tab === 'prompt' ? <PromptPage /> : null}
-          {tab === 'glossary' ? <PlannedPage messageKey="settings.glossary.planned" /> : null}
-          {tab === 'shortcuts' ? <PlannedPage messageKey="settings.shortcuts.planned" /> : null}
+          {tab === 'glossary' ? <GlossaryPage /> : null}
+          {tab === 'shortcuts' ? <ShortcutsPage /> : null}
           {tab === 'about' ? <AboutPage /> : null}
         </div>
       </main>

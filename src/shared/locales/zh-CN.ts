@@ -211,10 +211,42 @@ export const zhCN = {
       responseContract: '响应格式由程序追加（要求返回 detectedLanguage 与 translatedText），无需在此重复。'
     },
     glossary: {
-      planned: '术语表编辑页计划在第二阶段实现。'
+      description: '术语表会强制指定专有名词的译法，命中的条目会被注入到提示词里。',
+      search: '搜索术语',
+      add: '新增术语',
+      edit: '编辑',
+      delete: '删除',
+      deleteConfirm: '确定删除这条术语？',
+      empty: '还没有术语。添加后翻译会优先使用你指定的译法。',
+      emptySearch: '没有匹配的术语。',
+      notes: '备注（可选）',
+      notesPlaceholder: '例如：游戏内货币',
+      terms: '各语言写法',
+      addLanguage: '添加语言',
+      language: '语言',
+      variants: '写法',
+      variantsPlaceholder: '多个写法用逗号分隔',
+      variantsHint: '英文写法用于匹配原文，目标语言写法会作为强制译法。',
+      newEntry: '新术语',
+      save: '保存术语',
+      transfer: '导入 / 导出',
+      transferHint: '复制 JSON 备份，或粘贴 JSON 导入（同 id 会覆盖）。',
+      exportCopy: '复制 JSON',
+      importPlaceholder: '粘贴术语表 JSON…',
+      importApply: '导入',
+      importInvalid: 'JSON 格式不正确。'
     },
     shortcuts: {
-      planned: '快捷键配置页计划在第二阶段实现。默认不注册任何全局快捷键。'
+      description: '默认不注册任何全局快捷键；浮层按钮与托盘菜单已覆盖全部操作。',
+      toggleOverlayLabel: '显示 / 隐藏浮层',
+      translateClipboardLabel: '立即翻译剪贴板',
+      record: '点击后按下组合键',
+      recording: '请按下组合键…（Esc 取消）',
+      clear: '清除',
+      notSet: '未设置',
+      registered: '已生效',
+      failed: '注册失败（组合键可能已被占用）',
+      hint: '组合键至少包含一个修饰键（Ctrl / Alt / Shift / Cmd）。'
     },
     about: {
       version: '版本',

@@ -133,36 +133,41 @@ async function countHistoryItems(window: BrowserWindow): Promise<number> {
 }
 
 /**
- * Opens the prompt tab and asserts the live preview rendered.
+ * Opens a settings tab and asserts a page-specific condition.
  *
- * The preview is produced by the main process (real detection, real prompt
- * assembly), so this also proves that IPC path end to end.
+ * Each page is asserted by something only that page produces (the rendered prompt
+ * contract, the language rows, the recorder buttons), so a tab that silently
+ * renders nothing cannot pass.
  */
-async function checkPromptPreview(window: BrowserWindow, log: Logger): Promise<SelfCheckEntry> {
-  const name = 'prompt preview'
+async function checkSettingsTab(
+  window: BrowserWindow,
+  tab: string,
+  expression: string,
+  successDetail: string
+): Promise<SelfCheckEntry> {
+  const name = `settings:${tab}`
 
   try {
     const clicked = await window.webContents.executeJavaScript(
-      `(() => { const tab = document.querySelector('[data-settings-tab="prompt"]'); if (!tab) return false; tab.click(); return true })()`
+      `(() => { const tab = document.querySelector('[data-settings-tab="${tab}"]'); if (!tab) return false; tab.click(); return true })()`
     )
 
     if (!clicked) {
-      return { name, ok: false, detail: 'the prompt tab is missing from the settings window' }
+      return { name, ok: false, detail: `the ${tab} tab is missing from the settings window` }
     }
 
     const deadline = Date.now() + 5_000
-    let body = ''
 
     for (;;) {
-      body = await window.webContents.executeJavaScript('document.body.innerText')
+      const satisfied: boolean = await window.webContents.executeJavaScript(`Boolean(${expression})`)
 
-      if (body.includes('detectedLanguage')) {
-        return { name, ok: true, detail: 'the prompt tab rendered the live preview from the main process' }
+      if (satisfied) {
+        return { name, ok: true, detail: successDetail }
       }
 
       if (Date.now() > deadline) {
-        log.warn(`self-check prompt body text: ${body.slice(0, 200)}`)
-        return { name, ok: false, detail: 'the prompt preview never rendered' }
+        const body = await window.webContents.executeJavaScript('document.body.innerText')
+        return { name, ok: false, detail: `the ${tab} tab never rendered its content: ${body.slice(0, 160)}` }
       }
 
       await new Promise((resolve) => setTimeout(resolve, 100))
@@ -440,8 +445,32 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
       }
 
       if (target.view === 'settings' && bridge === 'object' && root.children > 0) {
-        const prompt = await checkPromptPreview(window, options.log)
-        push(prompt.name, prompt.ok, prompt.detail)
+        // Sequential rather than parallel: they all click tabs in the same window.
+        const tabs = [
+          await checkSettingsTab(window, 'providers', "document.body.innerText.includes('DeepSeek')", 'the provider catalogue rendered'),
+          await checkSettingsTab(
+            window,
+            'prompt',
+            "document.body.innerText.includes('detectedLanguage')",
+            'the prompt tab rendered the live preview from the main process'
+          ),
+          await checkSettingsTab(
+            window,
+            'glossary',
+            "document.body.innerText.includes('English')",
+            'the glossary editor rendered its language rows'
+          ),
+          await checkSettingsTab(
+            window,
+            'shortcuts',
+            "document.querySelectorAll('[data-shortcut-recorder]').length === 2",
+            'both shortcut recorders rendered'
+          )
+        ]
+
+        for (const tab of tabs) {
+          push(tab.name, tab.ok, tab.detail)
+        }
       }
 
       if (target.view === 'onboarding' && bridge === 'object' && root.children > 0) {

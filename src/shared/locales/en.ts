@@ -208,10 +208,42 @@ export const en: LocaleResource = {
       responseContract: 'The response format is appended by the app (detectedLanguage and translatedText); no need to repeat it here.'
     },
     glossary: {
-      planned: 'The glossary editor is planned for phase 2.'
+      description: 'The glossary forces the wording of specific terms; matches are injected into the prompt.',
+      search: 'Search terms',
+      add: 'Add term',
+      edit: 'Edit',
+      delete: 'Delete',
+      deleteConfirm: 'Delete this term?',
+      empty: 'No terms yet. Once added, translations prefer the wording you specify.',
+      emptySearch: 'No matching terms.',
+      notes: 'Note (optional)',
+      notesPlaceholder: 'e.g. in-game currency',
+      terms: 'Wording per language',
+      addLanguage: 'Add language',
+      language: 'Language',
+      variants: 'Wording',
+      variantsPlaceholder: 'Separate several wordings with commas',
+      variantsHint: 'Source-language wording is matched in the text; the target-language wording is enforced.',
+      newEntry: 'New term',
+      save: 'Save term',
+      transfer: 'Import / export',
+      transferHint: 'Copy the JSON as a backup, or paste JSON to import (same id overwrites).',
+      exportCopy: 'Copy JSON',
+      importPlaceholder: 'Paste glossary JSON…',
+      importApply: 'Import',
+      importInvalid: 'That is not valid JSON.'
     },
     shortcuts: {
-      planned: 'The shortcut page is planned for phase 2. No global shortcut is registered by default.'
+      description: 'No global shortcut is registered by default; the overlay buttons and the tray menu cover everything.',
+      toggleOverlayLabel: 'Show / hide the overlay',
+      translateClipboardLabel: 'Translate the clipboard now',
+      record: 'Click, then press the combination',
+      recording: 'Press the combination… (Esc cancels)',
+      clear: 'Clear',
+      notSet: 'Not set',
+      registered: 'Active',
+      failed: 'Registration failed (the combination may be taken)',
+      hint: 'A combination needs at least one modifier (Ctrl / Alt / Shift / Cmd).'
     },
     about: {
       version: 'Version',
