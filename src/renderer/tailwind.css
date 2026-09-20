@@ -1,0 +1,162 @@
+@import "tailwindcss";
+
+/* Dark mode is driven by a class that the preload script keeps in sync with the
+   effective Chromium colour scheme (which the main process controls through
+   nativeTheme.themeSource). */
+@variant dark (&:where(.dark, .dark *));
+
+/* ── Design tokens ─────────────────────────────────────────────────── */
+:root {
+  --text: #10161d;
+  --muted: #5d6b7a;
+  --faint: #8b97a5;
+  --border: rgba(16, 22, 29, 0.1);
+  --border-strong: rgba(16, 22, 29, 0.16);
+  --surface: rgba(255, 255, 255, 0.74);
+  --surface-strong: rgba(255, 255, 255, 0.96);
+  --surface-sunken: rgba(16, 22, 29, 0.04);
+  --surface-hover: rgba(16, 22, 29, 0.06);
+  --surface-opaque: #f7f8fa;
+  --accent: #0284c7;
+  --accent-hover: #0369a1;
+  --accent-soft: rgba(2, 132, 199, 0.12);
+  --accent-contrast: #ffffff;
+  --ok: #15803d;
+  --warn: #b45309;
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.12);
+  --shadow-float: 0 18px 45px rgba(15, 23, 42, 0.22);
+}
+
+.dark {
+  --text: #e9eef4;
+  --muted: #9aa7b4;
+  --faint: #6c7885;
+  --border: rgba(233, 238, 244, 0.12);
+  --border-strong: rgba(233, 238, 244, 0.2);
+  --surface: rgba(22, 26, 32, 0.76);
+  --surface-strong: rgba(18, 21, 26, 0.96);
+  --surface-sunken: rgba(233, 238, 244, 0.05);
+  --surface-hover: rgba(233, 238, 244, 0.08);
+  --surface-opaque: #14161a;
+  --accent: #38bdf8;
+  --accent-hover: #7dd3fc;
+  --accent-soft: rgba(56, 189, 248, 0.16);
+  --accent-contrast: #06131b;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.16);
+  --shadow-float: 0 18px 45px rgba(0, 0, 0, 0.45);
+}
+
+@theme {
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-surface: var(--surface);
+  --color-surface-strong: var(--surface-strong);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-opaque: var(--surface-opaque);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Noto Sans SC", sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+
+  --shadow-float: var(--shadow-float);
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    /* Every window is transparent underneath; each shell paints its own surface
+       so the overlay can keep its rounded, translucent chrome. */
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :root {
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  input,
+  textarea {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  /* Text the user may want to copy must stay selectable. */
+  .selectable,
+  .selectable * {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

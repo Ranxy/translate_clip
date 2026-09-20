@@ -1,0 +1,558 @@
+import { BrowserWindow, Menu, app, nativeTheme, screen, shell, type MenuItemConstructorOptions } from 'electron'
+
+import { OVERLAY_EDGE_MARGIN } from '@shared/constants'
+import type { AppConfig, RendererEventMap } from '@shared/types'
+
+import type { Logger } from './logStore'
+import type { WindowKind, WindowStateStore } from './windowStateStore'
+
+export type RendererView = WindowKind
+
+/** Height the overlay shrinks to in collapsed mode (header + one status line). */
+const COLLAPSED_OVERLAY_HEIGHT = 76
+
+export interface WindowManagerOptions {
+  preloadPath: string
+  rendererIndexPath: string
+  devServerUrl: string | undefined
+  windowStateStore: WindowStateStore
+  getConfig: () => AppConfig
+  log: Logger
+  /** True while the app should stay alive in the tray after the overlay is closed. */
+  shouldKeepRunningInTray: () => boolean
+  /** True once a real quit is in progress, so close handlers stop intercepting. */
+  isQuitting: () => boolean
+}
+
+function isSafeExternalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Owns every window in the app.
+ *
+ * The overlay is the product's face: frameless, transparent, always on top and
+ * never stealing focus. The settings and onboarding windows are ordinary windows
+ * so they behave the way users expect from native tooling.
+ */
+export class WindowManager {
+  private overlay: BrowserWindow | null = null
+  private settings: BrowserWindow | null = null
+  private onboarding: BrowserWindow | null = null
+  private expandedOverlayBounds: { x: number; y: number; width: number; height: number } | null = null
+
+  constructor(private readonly options: WindowManagerOptions) {}
+
+  /* ── Overlay ─────────────────────────────────────────────────────── */
+
+  getOverlayWindow(): BrowserWindow | null {
+    return this.overlay && !this.overlay.isDestroyed() ? this.overlay : null
+  }
+
+  createOverlayWindow(): BrowserWindow {
+    const existing = this.getOverlayWindow()
+    if (existing) {
+      return existing
+    }
+
+    const config = this.options.getConfig()
+    const bounds = this.resolveOverlayBounds(config)
+
+    const window = new BrowserWindow({
+      ...bounds,
+      minWidth: 300,
+      minHeight: 200,
+      maxHeight: 900,
+      show: false,
+      frame: false,
+      transparent: true,
+      resizable: true,
+      maximizable: false,
+      minimizable: false,
+      fullscreenable: false,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      hasShadow: false,
+      backgroundColor: '#00000000',
+      title: 'TranslateClip',
+      webPreferences: this.createWebPreferences()
+    })
+
+    this.overlay = window
+
+    // 'screen-saver' is the highest level Windows honours without exclusive
+    // fullscreen, and it is accepted (and ignored) on Linux.
+    window.setAlwaysOnTop(true, 'screen-saver')
+
+    if (process.platform === 'darwin') {
+      window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    }
+
+    this.installContextMenu(window)
+    this.installLinkHandler(window)
+    this.installRendererDiagnostics(window, 'overlay')
+    this.installWindowStatePersistence(window, 'overlay')
+
+    window.on('close', (event) => {
+      if (this.options.isQuitting()) {
+        return
+      }
+
+      if (this.options.shouldKeepRunningInTray()) {
+        event.preventDefault()
+        window.hide()
+      }
+    })
+
+    window.on('closed', () => {
+      this.overlay = null
+      this.expandedOverlayBounds = null
+    })
+
+    this.applyOverlayBehaviour(config)
+
+    void this.loadView(window, 'overlay').then(() => {
+      if (this.overlay && !this.overlay.isDestroyed()) {
+        this.showOverlay()
+      }
+    })
+
+    return window
+  }
+
+  showOverlay(): void {
+    const window = this.getOverlayWindow()
+    if (!window) {
+      return
+    }
+
+    if (window.isMinimized()) {
+      window.restore()
+    }
+
+    // showInactive keeps the user's current application focused: a clipboard
+    // translator must never steal the caret while someone is typing.
+    window.showInactive()
+    window.setAlwaysOnTop(true, 'screen-saver')
+    window.moveTop()
+  }
+
+  hideOverlay(): void {
+    this.getOverlayWindow()?.hide()
+  }
+
+  isOverlayVisible(): boolean {
+    const window = this.getOverlayWindow()
+    return Boolean(window?.isVisible())
+  }
+
+  toggleOverlay(): boolean {
+    if (this.isOverlayVisible()) {
+      this.hideOverlay()
+      return false
+    }
+
+    this.showOverlay()
+    return true
+  }
+
+  setOverlayCollapsed(collapsed: boolean): void {
+    const window = this.getOverlayWindow()
+    if (!window) {
+      return
+    }
+
+    const bounds = window.getBounds()
+
+    if (collapsed) {
+      this.expandedOverlayBounds = { ...bounds }
+      window.setBounds({ ...bounds, height: COLLAPSED_OVERLAY_HEIGHT })
+      return
+    }
+
+    const restoredHeight = this.expandedOverlayBounds?.height ?? this.options.getConfig().overlay.height
+    window.setBounds({ ...bounds, height: Math.max(restoredHeight, COLLAPSED_OVERLAY_HEIGHT) })
+    this.expandedOverlayBounds = null
+  }
+
+  setOverlayClickThrough(enabled: boolean): void {
+    const window = this.getOverlayWindow()
+    if (!window) {
+      return
+    }
+
+    // `forward: true` keeps hover events flowing to the renderer, so the
+    // click-through state can still be surfaced visually.
+    window.setIgnoreMouseEvents(enabled, { forward: true })
+  }
+
+  setOverlayOpacity(opacity: number): void {
+    const window = this.getOverlayWindow()
+    if (!window) {
+      return
+    }
+
+    window.setOpacity(Math.min(Math.max(opacity, 0.2), 1))
+  }
+
+  resizeOverlayBy(deltaY: number): void {
+    const window = this.getOverlayWindow()
+    if (!window) {
+      return
+    }
+
+    const bounds = window.getBounds()
+    const nextHeight = Math.min(Math.max(bounds.height + deltaY, 120), 900)
+    window.setBounds({ ...bounds, height: nextHeight })
+  }
+
+  /** Re-applies every config-driven overlay behaviour; called after each config change. */
+  applyOverlayBehaviour(config: AppConfig): void {
+    this.setOverlayOpacity(config.overlay.opacity)
+    this.setOverlayClickThrough(config.overlay.clickThrough)
+  }
+
+  /* ── Settings ────────────────────────────────────────────────────── */
+
+  getSettingsWindow(): BrowserWindow | null {
+    return this.settings && !this.settings.isDestroyed() ? this.settings : null
+  }
+
+  openSettingsWindow(): void {
+    const existing = this.getSettingsWindow()
+    if (existing) {
+      if (existing.isMinimized()) {
+        existing.restore()
+      }
+
+      existing.show()
+      existing.focus()
+      return
+    }
+
+    const saved = this.options.windowStateStore.getWindowState('settings')
+    const window = new BrowserWindow({
+      width: saved?.width ?? 760,
+      height: saved?.height ?? 780,
+      minWidth: 640,
+      minHeight: 560,
+      show: false,
+      title: 'TranslateClip Settings',
+      backgroundColor: this.getWindowBackgroundColor(),
+      autoHideMenuBar: true,
+      webPreferences: this.createWebPreferences()
+    })
+
+    this.settings = window
+
+    this.installContextMenu(window)
+    this.installLinkHandler(window)
+    this.installRendererDiagnostics(window, 'settings')
+    this.installWindowStatePersistence(window, 'settings')
+
+    window.once('ready-to-show', () => {
+      window.show()
+      window.focus()
+    })
+
+    window.on('closed', () => {
+      this.settings = null
+    })
+
+    void this.loadView(window, 'settings')
+  }
+
+  closeSettingsWindow(): void {
+    this.getSettingsWindow()?.close()
+  }
+
+  /* ── Onboarding ──────────────────────────────────────────────────── */
+
+  getOnboardingWindow(): BrowserWindow | null {
+    return this.onboarding && !this.onboarding.isDestroyed() ? this.onboarding : null
+  }
+
+  openOnboardingWindow(onClosed?: () => void): void {
+    const existing = this.getOnboardingWindow()
+    if (existing) {
+      existing.show()
+      existing.focus()
+      return
+    }
+
+    const window = new BrowserWindow({
+      width: 680,
+      height: 580,
+      resizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      show: false,
+      frame: false,
+      title: 'TranslateClip Setup',
+      backgroundColor: this.getWindowBackgroundColor(),
+      webPreferences: this.createWebPreferences()
+    })
+
+    this.onboarding = window
+
+    this.installContextMenu(window)
+    this.installLinkHandler(window)
+    this.installRendererDiagnostics(window, 'onboarding')
+
+    window.once('ready-to-show', () => {
+      window.show()
+      window.focus()
+    })
+
+    window.on('closed', () => {
+      this.onboarding = null
+      onClosed?.()
+    })
+
+    void this.loadView(window, 'onboarding')
+  }
+
+  closeOnboardingWindow(): void {
+    this.getOnboardingWindow()?.close()
+  }
+
+  /* ── Shared plumbing ─────────────────────────────────────────────── */
+
+  broadcast<K extends keyof RendererEventMap>(channel: K, payload: RendererEventMap[K]): void {
+    for (const window of this.getAllWindows()) {
+      window.webContents.send(channel, payload)
+    }
+  }
+
+  getAllWindows(): BrowserWindow[] {
+    return [this.overlay, this.settings, this.onboarding].filter(
+      (window): window is BrowserWindow => Boolean(window && !window.isDestroyed())
+    )
+  }
+
+  refreshWindowBackgroundColors(): void {
+    const background = this.getWindowBackgroundColor()
+
+    for (const window of [this.settings, this.onboarding]) {
+      if (window && !window.isDestroyed()) {
+        window.setBackgroundColor(background)
+      }
+    }
+  }
+
+  destroyAll(): void {
+    for (const window of this.getAllWindows()) {
+      window.destroy()
+    }
+
+    this.overlay = null
+    this.settings = null
+    this.onboarding = null
+  }
+
+  private createWebPreferences(): Electron.WebPreferences {
+    return {
+      preload: this.options.preloadPath,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+      // The overlay is meant to be overlaid on other apps; a devtools shortcut
+      // is still available in development builds via the menu.
+      devTools: !app.isPackaged
+    }
+  }
+
+  private async loadView(window: BrowserWindow, view: RendererView): Promise<void> {
+    const devServerUrl = this.options.devServerUrl
+
+    if (devServerUrl) {
+      await window.loadURL(`${devServerUrl}?view=${view}`)
+      return
+    }
+
+    await window.loadFile(this.options.rendererIndexPath, { query: { view } })
+  }
+
+  private resolveOverlayBounds(config: AppConfig): { x?: number; y?: number; width: number; height: number } {
+    const saved = this.options.windowStateStore.getWindowState('overlay')
+    const fallbackSize = {
+      width: Math.max(config.overlay.width, 300),
+      height: Math.max(config.overlay.height, 200)
+    }
+
+    if (!saved) {
+      return { ...this.getDefaultOverlayPosition(fallbackSize), ...fallbackSize }
+    }
+
+    const size = {
+      width: Math.max(saved.width, 300),
+      height: Math.max(saved.height, 200)
+    }
+
+    if (typeof saved.x !== 'number' || typeof saved.y !== 'number') {
+      return { ...this.getDefaultOverlayPosition(size), ...size }
+    }
+
+    const candidate = { x: saved.x, y: saved.y, ...size }
+    if (!this.isVisibleOnAnyDisplay(candidate)) {
+      return { ...this.getDefaultOverlayPosition(size), ...size }
+    }
+
+    return candidate
+  }
+
+  private getDefaultOverlayPosition(size: { width: number; height: number }): { x: number; y: number } {
+    const { workArea } = screen.getPrimaryDisplay()
+
+    return {
+      x: Math.round(workArea.x + workArea.width - size.width - OVERLAY_EDGE_MARGIN),
+      y: Math.round(workArea.y + workArea.height - size.height - OVERLAY_EDGE_MARGIN)
+    }
+  }
+
+  private isVisibleOnAnyDisplay(bounds: { x: number; y: number; width: number; height: number }): boolean {
+    return screen.getAllDisplays().some((display) => {
+      const { workArea } = display
+
+      return !(
+        bounds.x + bounds.width <= workArea.x ||
+        workArea.x + workArea.width <= bounds.x ||
+        bounds.y + bounds.height <= workArea.y ||
+        workArea.y + workArea.height <= bounds.y
+      )
+    })
+  }
+
+  private installWindowStatePersistence(window: BrowserWindow, kind: WindowKind): void {
+    let timer: NodeJS.Timeout | null = null
+
+    const persistNow = () => {
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+
+      void this.options.windowStateStore.updateWindowState(kind, this.captureWindowState(window))
+    }
+
+    const schedule = () => {
+      if (timer) {
+        clearTimeout(timer)
+      }
+
+      timer = setTimeout(persistNow, 200)
+    }
+
+    window.on('move', schedule)
+    window.on('resize', schedule)
+    window.on('maximize', persistNow)
+    window.on('unmaximize', persistNow)
+    window.on('close', persistNow)
+  }
+
+  private captureWindowState(window: BrowserWindow): { x?: number; y?: number; width: number; height: number; isMaximized: boolean } {
+    const bounds = window.isMaximized() ? window.getNormalBounds() : window.getBounds()
+
+    return {
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+      isMaximized: window.isMaximized()
+    }
+  }
+
+  /**
+   * Surfaces renderer failures in the main log.
+   *
+   * The overlay has no visible chrome, so a renderer that crashed or failed to
+   * load would otherwise look like "the app did nothing". Console output is only
+   * forwarded in development to keep release logs clean.
+   */
+  private installRendererDiagnostics(window: BrowserWindow, view: RendererView): void {
+    const { log } = this.options
+
+    window.on('closed', () => {
+      log.info(`[${view}] window closed`)
+    })
+
+    window.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedUrl) => {
+      log.error(`[${view}] renderer failed to load ${validatedUrl} (${errorCode}): ${errorDescription}`)
+    })
+
+    window.webContents.on('preload-error', (_event, preloadPath, error) => {
+      log.error(`[${view}] preload failed: ${preloadPath}`, error)
+    })
+
+    window.webContents.on('render-process-gone', (_event, details) => {
+      log.error(`[${view}] renderer process gone: ${details.reason} (exit code ${details.exitCode})`)
+    })
+
+    if (!app.isPackaged) {
+      window.webContents.on('console-message', (details) => {
+        if (details.level === 'error' || details.level === 'warning') {
+          log.warn(`[${view}] console ${details.level}: ${details.message}`)
+        }
+      })
+    }
+  }
+
+  private installContextMenu(window: BrowserWindow): void {
+    window.webContents.on('context-menu', (_event, params) => {
+      const template: MenuItemConstructorOptions[] = []
+
+      if (params.isEditable) {
+        template.push(
+          { role: 'undo' },
+          { role: 'redo' },
+          { type: 'separator' },
+          { role: 'cut' },
+          { role: 'copy' },
+          { role: 'paste' },
+          { role: 'selectAll' }
+        )
+      } else if (params.selectionText.trim().length > 0) {
+        template.push({ role: 'copy' }, { type: 'separator' }, { role: 'selectAll' })
+      }
+
+      if (template.length === 0) {
+        return
+      }
+
+      Menu.buildFromTemplate(template).popup({ window })
+    })
+  }
+
+  private installLinkHandler(window: BrowserWindow): void {
+    window.webContents.setWindowOpenHandler(({ url }) => {
+      if (isSafeExternalUrl(url)) {
+        void shell.openExternal(url)
+      }
+
+      return { action: 'deny' }
+    })
+
+    window.webContents.on('will-navigate', (event, url) => {
+      const currentUrl = window.webContents.getURL()
+      if (url === currentUrl) {
+        return
+      }
+
+      event.preventDefault()
+
+      if (isSafeExternalUrl(url)) {
+        void shell.openExternal(url)
+      }
+    })
+  }
+
+  private getWindowBackgroundColor(): string {
+    return nativeTheme.shouldUseDarkColors ? '#101418' : '#f7f8fa'
+  }
+}

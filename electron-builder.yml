@@ -1,0 +1,35 @@
+appId: com.ranxy.translateclip
+productName: TranslateClip
+directories:
+  output: dist
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  - from: resources
+    to: resources
+    filter:
+      - "**/*"
+asar: true
+asarUnpack:
+  - "**/node_modules/sql.js/dist/*.wasm"
+artifactName: ${productName}-${version}-${arch}.${ext}
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icons/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: TranslateClip
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Utility
+  icon: resources/icons
+  maintainer: Ranxy
