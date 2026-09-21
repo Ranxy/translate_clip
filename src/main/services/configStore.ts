@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { APP_LIMITS, DEFAULT_CONFIG, isSupportedLanguage } from '@shared/constants'
+import { SUPPORTED_LOCALES } from '@shared/locales'
 import type {
   AppConfig,
   DirectionMode,
@@ -209,7 +210,7 @@ function sanitizeTermsMap(input: unknown): Record<string, string[]> {
   return result
 }
 
-const UI_LANGUAGES: UiLanguage[] = ['system', 'zh-CN', 'en']
+const UI_LANGUAGES: UiLanguage[] = ['system', ...SUPPORTED_LOCALES]
 const THEMES: ThemeMode[] = ['system', 'light', 'dark']
 const DIRECTION_MODES: DirectionMode[] = ['auto', 'fixed']
 const LOG_LEVELS: LogLevel[] = ['error', 'warn', 'info', 'debug']

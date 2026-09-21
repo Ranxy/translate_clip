@@ -14,7 +14,7 @@
 | 项 | 值 |
 | --- | --- |
 | 操作系统 | Windows 10/11 x64(开发机为 2560×1440 @150% 缩放) |
-| Node.js | 22+(开发使用 24) |
+| Node.js | 22.18+(开发使用 24)。低于 22.18 时 Node 无法直接导入 `.ts`,i18n 校验脚本会明确报错退出 |
 | 包管理器 | npm(项目用 `package-lock.json`,不引入 pnpm) |
 | Shell | PowerShell 7(脚本本身跨平台) |
 
@@ -30,8 +30,10 @@
 | `npm run dev:gpu-off` | 同上,但附加 `--disable-gpu`(驱动/合成异常时的逃生口;跨平台写法,Windows 可用) |
 | `npm run build` | 产出 `out/main`、`out/preload`、`out/renderer` |
 | `npm run typecheck` | `tsc --noEmit`,覆盖主进程、preload、渲染进程与共享层 |
-| `npm test` | vitest 单元测试(当前 162 条) |
+| `npm test` | vitest 单元测试(当前 182 条) |
 | `npm run test:watch` | vitest watch |
+| `npm run i18n:check` | i18n 审计 + key 顺序检查(见 §8) |
+| `npm run i18n:sort` | 按基准语言(zh-CN)重排各 locale 模块的 key 顺序 |
 | `npm run self-check` | 构建后以 `--self-check` 启动,跑一遍端到端自检(见 §4) |
 | `npm run icons` | 重新生成 `resources/` 里的图标(无第三方依赖的生成脚本) |
 | `npm run pack` | `electron-builder --dir`,产出未打包目录,便于检查 asar 布局 |
@@ -46,6 +48,7 @@
 ```
 src/
   shared/   types / constants / languages / locales —— 两个进程共用
+            locales/  界面语言目录(index.ts)+ 各语言文案(zh-CN 为类型基准)
   main/     生命周期、IPC 路由与服务
     services/  config、credential、database(sql.js)、llmClient、translationQueue、
                clipboardWatcher/Filter、languageDetector、promptBuilder、history、
@@ -67,8 +70,9 @@ src/
 
 | 层 | 手段 | 覆盖 |
 | --- | --- | --- |
-| 单元 | `npm test`(vitest,162 条) | 过滤链、语言检测、提示词组装、响应三层解析、配置夹取、仓储与缓存、队列 latest-wins 与重试、快捷键管理器、i18n key 审计 |
-| 自检 | `npm run self-check`(28 项) | 真实 Electron 内跑:资源与图标解码、userData 可写、三个视图挂载、剪贴板管线、真实(桩)翻译、浮层缩放、错误浮层、配置抖动、各设置页、暂停控件、清空当前、向导四步 |
+| 单元 | `npm test`(vitest,182 条) | 过滤链、语言检测、提示词组装、响应三层解析、配置夹取、仓储与缓存、队列 latest-wins 与重试、快捷键管理器、i18n key 审计与各语言的 key/占位符对齐 |
+| 审计 | `npm run i18n:check` | 跨源码与文案的静态审计:目录注册、缺失、无用、各语言一致性与顺序、`{{}}` 占位符(见 §8) |
+| 自检 | `npm run self-check`(30 项) | 真实 Electron 内跑:资源与图标解码、userData 可写、三个视图挂载、剪贴板管线、真实(桩)翻译、浮层缩放、错误浮层、配置抖动、各设置页、暂停控件、清空当前、向导四步、向导首屏的语言选择器,**四种界面语言 × 两个标签页 × 折叠条的浮层布局测量(默认宽度必须单行,最小宽度不得裁切)** |
 | 手工 | [WINDOWS-VERIFICATION.md](WINDOWS-VERIFICATION.md) | 自动化到不了的部分:真实剪贴板、置顶层级、托盘、全局快捷键、开机自启、安装包 |
 
 自检的约定值得知道:**它不读你的剪贴板**(`--self-check` 下不启动 watcher),也不会留下副作用
@@ -117,3 +121,49 @@ CI 侧 `.github/workflows/build-windows.yml` 在 `windows-latest` 上跑
 
 写库只改内存,再以「debounce 1.5s + 最多 5s 强制落盘 + 原子写」持久化;`--self-check` 与正常退出
 都会 `flushNow`。历史按 `historyLimit`(默认 500)裁剪,避免每次导出整库的体积线性增长。
+
+---
+
+## 8. 多语言(i18n)
+
+### 8.1 结构
+
+| 位置 | 作用 |
+| --- | --- |
+| `src/shared/locales/index.ts` | 语言目录:`SUPPORTED_LOCALES`(也决定 key 顺序基准,第一条即基准)、`UI_LOCALE_OPTIONS`(下拉框)、`resolveLocale()`(任意 BCP-47 → 已发布语言,未知语言回落 `en`) |
+| `src/shared/locales/zh-CN.ts` | **基准文案**。`export type LocaleResource = typeof zhCN`,其余语言都以它为类型 |
+| `src/shared/locales/{en,ja,ru}.ts` | 各语言文案,结构与 key 必须与基准完全一致 |
+| `src/renderer/i18n/index.ts` | 渲染进程 `i18next` 初始化、`changeLanguage()`、同步 `<html lang>` |
+| `src/main/i18n.ts` | 主进程轻量 `translate()`(托盘、通知),复用同一份 locale 模块 |
+
+界面语言存在 `config.uiLanguage`,取值 `'system' | SupportedLocale`。`'system'` 在主进程由
+`app.getLocale()`、在渲染进程由 `navigator.language` 展开,两者都经 `resolveLocale()` 归一。用户可在
+**引导向导第 1 屏**和 **设置 → 通用**两处修改,改完立即重渲染并持久化(不需要重启)。
+
+### 8.2 加一门语言
+
+1. 复制 `src/shared/locales/en.ts`,导出名改成该语言(如 `ko`),逐条翻译 —— key 一条都不要增删。
+2. 在 `index.ts` 里:加入 `SupportedLocale` 联合类型、`SUPPORTED_LOCALES`(追加在末尾即可,基准不能换)、
+   `LOCALE_RESOURCES`、`UI_LOCALE_OPTIONS`,并在 `resolveLocale()` 的 `switch` 里加一个 `case`。
+3. `npm run i18n:sort` 把新文件的 key 顺序对齐基准,然后 `npm run typecheck && npm run i18n:check && npm test`。
+
+`UiLanguage` 由 `SupportedLocale` 派生,`configStore` 的白名单也来自 `SUPPORTED_LOCALES`,所以除了上面
+两处没有别的注册点。**漏翻或拼错 key 是编译错误**,不需要靠审计脚本兜底。
+
+### 8.3 校验脚本
+
+| 脚本 | 检查 |
+| --- | --- |
+| `npm run i18n:check` | `scripts/check-i18n.mjs`(审计)+ `scripts/sort-i18n-keys.mjs --check`(顺序) |
+| `npm run i18n:sort` | 按基准顺序重排;写入后**重新导入并深比较**,不一致就回滚原文件 |
+
+审计的六项:① 磁盘上的 locale 模块、`SUPPORTED_LOCALES`、`UI_LOCALE_OPTIONS` 三者一致;② 代码里
+`t('key')` / `translate('key')` 用到的 key 都存在;③ 文案里有、代码里没人用的 key(**会报错** ——
+无用文案会烂掉,要么删掉要么接上);④ 各语言 key 集合与基准完全一致;⑤ key 顺序与基准一致;
+⑥ 各语言同一 key 的 `{{占位符}}` 完全一致,且不允许出现单个 `{name}`(react-i18next 会原样输出)。
+
+用**计算出来的** key(模板字符串、查表)引用时,脚本看不见调用点,必须把前缀登记到
+`scripts/check-i18n.mjs` 顶部的 `DYNAMIC_PREFIXES` 并注明调用处;这是唯一需要人工维护的地方。
+
+脚本直接 `import` locale 模块(靠 Node ≥22.18 的类型擦除),所以文案是 TypeScript 而不是 JSON ——
+换 JSON 会丢掉「漏 key 即编译错误」这条最强保障。因此 CI 的 `node-version` 是 24。

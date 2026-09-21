@@ -50,8 +50,10 @@ install over the previous one; your settings and history are kept.
 
 A four-step wizard opens the first time:
 
-1. **Direction** — which language to translate into, and what to do when the text is already in that
-   language. This step is required; everything else has sensible defaults.
+1. **Language and direction** — the wizard opens in your system language; the picker at the top
+   switches it straight away. Below it, choose which language to translate into and what to do when
+   the text is already in that language. The direction is required; everything else has sensible
+   defaults.
 2. **Provider** — pick a service, paste an API key, fetch its model list, press *Test connection*.
    This step can be skipped and set up later.
 3. **Clipboard and privacy** — what gets sent where, plus length limits, ignore rules and the option

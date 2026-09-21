@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next'
 
-import { APP_LIMITS, LANGUAGE_OPTIONS } from '@shared/constants'
+import { APP_LIMITS } from '@shared/constants'
 
+import { uiLanguageHint, uiLanguageSelectOptions } from '../../i18n/languageOptions'
 import { useAppState, useAppStore } from '../../store/appStore'
 import { Button } from '../ui/Button'
 import { Card, CardHeader, Divider } from '../ui/Card'
@@ -16,10 +17,7 @@ export function GeneralPage() {
   const { config, capabilities } = useAppState().bootstrap
   const diagnostics = useAppState().bootstrap.diagnostics
 
-  const languageOptions = [
-    { value: 'system', label: t('settings.general.uiLanguageSystem') },
-    ...LANGUAGE_OPTIONS.map((option) => ({ value: option.value, label: `${option.nativeLabel} — ${option.label}` }))
-  ]
+  const languageOptions = uiLanguageSelectOptions(t)
 
   return (
     <>
@@ -38,9 +36,10 @@ export function GeneralPage() {
           />
         </Field>
         <Divider />
-        <Field label={t('settings.general.uiLanguage')}>
+        <Field label={t('settings.general.uiLanguage')} hint={uiLanguageHint(t, config.uiLanguage)}>
           <Select
             className="w-56"
+            data-ui-language
             value={config.uiLanguage}
             onValueChange={(value) => void store.updateConfig({ uiLanguage: value as typeof config.uiLanguage })}
             options={languageOptions}

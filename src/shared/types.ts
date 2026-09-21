@@ -6,6 +6,8 @@
  * imports from `electron` so the renderer bundle stays clean.
  */
 
+import type { SupportedLocale } from './locales'
+
 /* ── Platform ──────────────────────────────────────────────────────── */
 
 export type PlatformId = 'windows' | 'macos' | 'linux' | 'other'
@@ -238,7 +240,8 @@ export interface GlossaryEntry {
 /* ── Configuration ─────────────────────────────────────────────────── */
 
 export type DirectionMode = 'auto' | 'fixed'
-export type UiLanguage = 'system' | 'zh-CN' | 'en'
+/** 'system' means "follow the OS locale"; the rest are shipped interface locales. */
+export type UiLanguage = 'system' | SupportedLocale
 export type ThemeMode = 'system' | 'light' | 'dark'
 export type ShortcutAction = 'toggleOverlay' | 'translateClipboard'
 

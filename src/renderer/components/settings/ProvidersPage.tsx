@@ -360,17 +360,26 @@ export function ProvidersPage() {
             <div className="flex items-center gap-2">
               <TextInput
                 id="provider-api-key"
-                type="password"
+                type={form.revealStoredKey ? 'text' : 'password'}
                 value={form.apiKey}
                 placeholder={hasStoredKey && !form.revealStoredKey ? t('settings.providers.apiKeyStored') : t('settings.providers.apiKeyPlaceholder')}
                 spellCheck={false}
                 autoComplete="off"
                 onChange={(event) => setForm((current) => ({ ...current, apiKey: event.target.value }))}
               />
-              {hasStoredKey && !form.revealStoredKey ? (
-                <Button size="sm" onClick={() => void revealStoredKey()}>
-                  {t('settings.providers.revealKey')}
-                </Button>
+              {hasStoredKey ? (
+                form.revealStoredKey ? (
+                  <Button
+                    size="sm"
+                    onClick={() => setForm((current) => ({ ...current, apiKey: '', revealStoredKey: false }))}
+                  >
+                    {t('settings.providers.hideKey')}
+                  </Button>
+                ) : (
+                  <Button size="sm" onClick={() => void revealStoredKey()}>
+                    {t('settings.providers.revealKey')}
+                  </Button>
+                )
               ) : null}
             </div>
             {!capabilities.keyring ? <p className="mt-1.5 text-[11.5px] text-warn">{t('settings.about.keyringMissingHint')}</p> : null}

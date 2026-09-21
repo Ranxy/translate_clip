@@ -35,7 +35,8 @@ export function AboutPage() {
         <CardHeader title={t('settings.about.version')} />
         <Row label={t('settings.about.version')}>{`${diagnostics.appVersion} (${t('app.productName')})`}</Row>
         <Row label={t('settings.about.electron')}>{diagnostics.electronVersion}</Row>
-        <Row label={t('settings.about.platform')}>{`${diagnostics.platform} · ${diagnostics.arch}`}</Row>
+        <Row label={t('settings.about.platform')}>{diagnostics.platform}</Row>
+        <Row label={t('settings.about.arch')}>{diagnostics.arch}</Row>
         <Divider />
         <Row label={t('settings.about.dataFolder')}>
           <span className="font-mono text-[11.5px]">{diagnostics.userDataPath}</span>

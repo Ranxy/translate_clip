@@ -2,7 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 
 import { App } from './App'
-import { initI18n, resolveUiLanguage } from './i18n'
+import { initI18n } from './i18n'
 import './tailwind.css'
 
 function renderFatalError(message: string): void {
@@ -25,7 +25,9 @@ async function bootstrap(): Promise<void> {
 
   try {
     const data = await api.getBootstrapData()
-    await initI18n(resolveUiLanguage(data.config.uiLanguage))
+    // The interface language must be applied before the first paint, or the
+    // window flashes the fallback language for a frame.
+    await initI18n(data.config.uiLanguage)
 
     ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <React.StrictMode>

@@ -5,7 +5,7 @@ import { useAppState, useAppStore } from '../../store/appStore'
 import { cn, dragRegion, noDragRegion } from '../../utils/cn'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
-import { IconChevronDown, IconClose, IconCopy, IconGear, IconMinus, IconRefresh, IconTrash } from '../ui/Icon'
+import { IconChevronDown, IconClose, IconGear, IconMinus, IconTrash } from '../ui/Icon'
 import { HistoryPanel } from './HistoryPanel'
 import { StatusBar } from './StatusBar'
 import { WatchToggle } from './WatchToggle'
@@ -165,7 +165,14 @@ function CollapsedBar() {
   /** True once the preview needs more than the one line the bar starts as. */
   const [wrapped, setWrapped] = useState(false)
 
-  const preview = translationState.translatedText ?? translationState.sourceText ?? t('overlay.emptyTitle')
+  /**
+   * The idle hint is a short phrase, not the expanded panel's sentence.
+   *
+   * The bar is one line wide by design — that is the whole point of the collapsed
+   * form — so a full sentence here wrapped it to three lines in Russian. The
+   * self-check measures this slot in every language and fails if it is not one line.
+   */
+  const preview = translationState.translatedText ?? translationState.sourceText ?? t('overlay.emptyTitleShort')
   const hasContent = Boolean(translationState.sourceText || translationState.translatedText)
 
   /**
@@ -265,6 +272,7 @@ function CollapsedBar() {
             Tailwind scans for, so it is not built from a constant. */}
         <span
           ref={textRef}
+          data-collapsed-text
           className="line-clamp-6 min-w-0 flex-1 selectable text-[12px] leading-5 text-muted"
           title={preview}
         >
@@ -336,7 +344,11 @@ export function OverlayShell() {
         )}
         style={{ boxShadow: 'var(--shadow-float)' }}
       >
-        <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2" style={dragRegion}>
+        <header
+          data-overlay-header
+          className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2"
+          style={dragRegion}
+        >
           <span className="text-[12.5px] font-semibold tracking-wide text-text">{t('overlay.title')}</span>
           <WatchToggle />
           <span className="flex-1" />
@@ -365,31 +377,38 @@ export function OverlayShell() {
 
         {tab === 'current' ? <CurrentPanel /> : <HistoryPanel active />}
 
-        <div className="flex shrink-0 items-center gap-1.5 border-t border-border px-3 py-2">
-          {/* The short form of "translate clipboard now": at this width the full wording wrapped
-              inside its own button and took the whole row to two lines with it. The tooltip keeps
-              the longer phrasing. */}
+        <div
+          data-overlay-actions
+          className="flex shrink-0 flex-wrap items-center gap-1.5 border-t border-border px-3 py-2"
+        >
+          {/* Labels only, no icons: at 12px a 380 DIP overlay has room for either an
+              icon or the words, not both, once "Копировать" and the Current/History
+              switcher are on the same line. The tooltips keep the full phrasing, the
+              panel's other buttons ("Set up", "Retry") are text-only too, and every
+              control here is `shrink-0` — without it flex squashed the trash button to
+              a 14 DIP sliver and the label buttons had nowhere to go but off the row. */}
           <Button
             size="sm"
-            className="whitespace-nowrap"
+            className="shrink-0 whitespace-nowrap"
             title={t('overlay.actionTranslateNow')}
             onClick={() => void window.translateClip.translateClipboardNow()}
           >
-            <IconRefresh />
             {t('overlay.actionTranslateShort')}
           </Button>
           <Button
             size="sm"
-            className="whitespace-nowrap"
+            className="shrink-0 whitespace-nowrap"
+            title={t('overlay.actionCopy')}
+            aria-label={t('overlay.actionCopy')}
             disabled={!canCopy}
             onClick={() => translationState.translatedText && void window.translateClip.copyText(translationState.translatedText)}
           >
-            <IconCopy />
-            {t('overlay.actionCopy')}
+            {t('overlay.actionCopyShort')}
           </Button>
           <Button
             size="icon"
             variant="ghost"
+            className="shrink-0"
             data-clear-current
             disabled={!canClear}
             title={t('overlay.actionClear')}
@@ -398,16 +417,19 @@ export function OverlayShell() {
           >
             <IconTrash />
           </Button>
-          <span className="flex-1" />
-          <div className="flex items-center rounded-lg bg-surface-sunken p-0.5">
+          {/* `ml-auto` rather than a spacer span: when a long language finally does not
+              fit, the switcher wraps onto its own line and this keeps it on the right
+              of that line instead of leaving it stranded on the left. */}
+          <div className="ml-auto flex shrink-0 items-center rounded-lg bg-surface-sunken p-0.5">
             {(['current', 'history'] as OverlayTab[]).map((value) => (
               <button
                 key={value}
                 type="button"
                 data-tab={value}
                 onClick={() => setTab(value)}
+                title={value === 'current' ? t('overlay.tabCurrent') : t('overlay.tabHistory')}
                 className={cn(
-                  'whitespace-nowrap rounded-md px-2 py-1 text-[11.5px] transition-colors',
+                  'whitespace-nowrap rounded-md px-1.5 py-1 text-[11.5px] transition-colors',
                   tab === value ? 'bg-surface-strong text-text shadow-sm' : 'text-muted hover:text-text'
                 )}
               >
@@ -418,7 +440,12 @@ export function OverlayShell() {
         </div>
 
         {warnings.length > 0 ? (
-          <p className="shrink-0 border-t border-border px-3 py-1.5 text-[11px] leading-relaxed text-warn">{warnings.join(' · ')}</p>
+          <p
+            data-overlay-warning
+            className="shrink-0 border-t border-border px-3 py-1.5 text-[11px] leading-relaxed text-warn"
+          >
+            {warnings.join(' · ')}
+          </p>
         ) : null}
 
         <StatusBar />

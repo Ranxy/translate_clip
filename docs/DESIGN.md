@@ -86,7 +86,7 @@ OCR / 划词取词。Windows 侧的人工验证清单见 [`WINDOWS-VERIFICATION.
 - **技术栈**:沿用 eve-babel 方案 —— Electron + electron-vite + React + TS + Tailwind v4,组件手写(不引入 shadcn/Radix)。
 - **持久化**:要历史记录,用 **sql.js**(纯 wasm,免原生编译)。
 - **语言方向**:自动检测源语言 + 智能互译(源文已是目标语言则反向翻)。
-- **一期功能集**:一键复制译文/回写剪贴板、设置窗口(Provider/语言/快捷键/开机自启)、术语表、托盘图标 + 主窗口隐藏、深浅色跟随系统、i18n(中/英)。
+- **一期功能集**:一键复制译文/回写剪贴板、设置窗口(Provider/语言/快捷键/开机自启)、术语表、托盘图标 + 主窗口隐藏、深浅色跟随系统、i18n(中/英/日/俄,默认跟随系统)。
 - **Provider**:OpenAI / DeepSeek / OpenRouter / 自定义 OpenAI 兼容 + **Ollama(本地)**。
 - **产品命名**:`TranslateClip` / 中文 `剪译`,appId `com.ranxy.translateclip`。
 - **快捷键**:默认**不注册**任何全局快捷键,由用户自行录制(托盘 + 浮层按钮必须覆盖全部核心操作)。
@@ -118,7 +118,9 @@ OCR / 划词取词。Windows 侧的人工验证清单见 [`WINDOWS-VERIFICATION.
 | 请求策略 | **latest-wins**:新剪贴板内容到达即 abort 上一个在途请求 | 剪贴板场景不存在"排队"语义,串行队列只会让用户看到过期译文。 |
 | 流式输出 | 一期**非流式**,`streamEnabled` 预留开关(二期) | 非流式实现简单、错误路径清晰;单条文本的流式改造只在 `llmClient` 内,不扩散。 |
 | 翻译结果格式 | 让 LLM 返回 `{detectedLanguage, translatedText}` JSON,解析失败则**整体回落为纯文本** | 一次调用同时完成"检测 + 翻译",省一次请求;宽松解析保证模型不听话时仍可用。 |
-| i18n | 渲染进程 `i18next` + `react-i18next`;主进程用共享 locale 模块 + 30 行 `translate()` | 不把 i18next 拉进主进程 bundle,托盘菜单文案仍可中英切换。 |
+| i18n | 渲染进程 `i18next` + `react-i18next`;主进程用共享 locale 模块 + 30 行 `translate()` | 不把 i18next 拉进主进程 bundle,托盘菜单文案仍可随界面语言切换。 |
+| 界面语言目录 | `shared/locales` 一处定义(`SUPPORTED_LOCALES` + `UI_LOCALE_OPTIONS`),`UiLanguage` 由它派生;`en/ja/ru` 以 `zh-CN` 为类型基准 | 加一门语言 = 加一个 locale 模块 + 一行目录;漏 key 是**编译错误**,漏翻译由 `npm run i18n:check` 拦下。 |
+| 界面语言落点 | 引导向导第 1 屏与 设置 → 通用 各一个下拉框,`system` 伪值由主进程 `app.getLocale()` / 渲染进程 `navigator.language` 展开 | 用户第一次看到的就是他能读懂的语言;改完立即重渲染并持久化,不需要重启。 |
 | 进程安全 | `contextIsolation:true`、`nodeIntegration:false`、`sandbox:true`,渲染进程只经 preload 白名单 IPC | preload 仅用 `ipcRenderer`,可安全开启 sandbox。 |
 | 单实例 | `requestSingleInstanceLock()`,第二实例聚焦浮层 | 避免重复监听剪贴板、重复托盘图标。 |
 
@@ -201,7 +203,7 @@ translate_clip/
    │  ├─ types.ts                    # 全部跨进程类型 + IPC 契约
    │  ├─ constants.ts                # 默认配置、限制值
    │  ├─ languages.ts                # 语言目录(BCP-47)+ 脚本区间表
-   │  └─ locales/{zh-CN.ts,en.ts}    # 主/渲染进程共用文案
+   │  └─ locales/{index.ts,zh-CN.ts,en.ts,ja.ts,ru.ts}  # 共用文案(zh-CN 为基准)
    ├─ main/
    │  ├─ main.ts                     # 生命周期 + App 编排 + IPC 注册
    │  ├─ preload.ts                  # contextBridge 暴露 window.translateClip
@@ -638,6 +640,7 @@ interface AppConfig {
 - 圆角 16px,1px 半透明描边,`backdrop-blur-xl`,浅色 `bg-white/70`、深色 `bg-neutral-900/70`。
 - 单一强调色(Tailwind `sky`/`teal` 之一,定稿时选一个),其余全靠中性灰阶;不用渐变与阴影堆叠(eve-babel 的 token 体系里有一批很重的渐变,我们**只保留** `--panel-surface` / `--border` / `--text` / `--muted` / `--accent` 等必要 token)。
 - 字号层级只用三档:12 / 14 / 16;间距用 4 的倍数。
+- **窄槽位的文案预算**:浮层只有 380 DIP 宽(最小 300),操作行的每个按钮、状态条的状态词、`当前/历史` 切换器、以及**折叠条的空闲提示**都只有一行可用;而同一句话在四门语言里的长度能差一倍(「复制译文」/「Copy translation」/「Копировать перевод」)。因此这些位置一律**只放短词**,完整措辞交给 `title`(如 `overlay.actionCopy` 完整、`overlay.actionCopyShort` 上按钮;`emptyTitle` 是展开态整句、`emptyTitleShort` 是折叠条短语),操作行两个文字按钮也**不带图标**——12px 字号下 380 DIP 放不下「图标 + 词 + 视图切换器」三者。极限由 `npm run self-check` 的 overlay localization 探针守卫:4 种语言 × 2 个标签页 × 折叠条 ×(默认 380 / 最小 300 DIP),默认宽度必须**逐行单行**,最小宽度必须**不被裁切**(放不下时换行,而不是溢出)。
 - 动效:仅 `opacity` + `transform`,120–180ms `ease-out`;尊重 `prefers-reduced-motion`。
 - 全站 `user-select: none`,但译文/原文/输入框 `user-select: text`。
 
@@ -659,7 +662,7 @@ interface AppConfig {
 
 | 步骤 | 内容 | 是否必填 |
 | --- | --- | --- |
-| 1. 欢迎 + 翻译方向 | 选 `targetLanguage`(默认 zh-CN)、`fallbackLanguage`(默认 en-US)、`directionMode`(默认 auto);右侧实时预览规则,例如"非中文 → 中文;中文 → English" | **必填(你要求的方向配置在此完成)** |
+| 1. 界面语言 + 翻译方向 | 顶部选界面语言(默认 `system`,即跟随系统,选中即刻整窗重渲染);再选 `targetLanguage`(默认 zh-CN)、`fallbackLanguage`(默认 en-US)、`directionMode`(默认 auto);右侧实时预览规则,例如"非中文 → 中文;中文 → English" | **必填(你要求的方向配置在此完成)** |
 | 2. 接入 LLM | Provider 五选一(OpenAI / DeepSeek / OpenRouter / Ollama / 自定义)+ API Key + Base URL + 模型(`拉取模型` 下拉 + 搜索)+ `测试连接`(就地显示延迟或错误) | 可「稍后配置」跳过 |
 | 3. 剪贴板与隐私 | 说明"复制即翻译、内容会发送到你所配置的 LLM 服务";提供 `clipboardWatchEnabled`、`skipSingleToken`、忽略正则的快速编辑 | 可跳过(默认值已合理) |
 | 4. 系统集成 | 开机自启、关闭到托盘、快捷键录制(默认留空,并解释"不设快捷键也完全可用") | 可跳过 |

@@ -157,6 +157,9 @@ class TranslateClipApp {
       devServerUrl: process.env.ELECTRON_RENDERER_URL,
       windowStateStore: this.windowStateStore,
       getConfig: () => this.config,
+      // Deferred through `this` so a title refresh after a language change uses the
+      // translator that was rebuilt for it, not the one captured at construction.
+      translate: (key: string, params?: Record<string, string | number>) => this.translator(key, params),
       log: this.logger,
       shouldKeepRunningInTray: () => this.config.closeToTray && this.capabilities.get().tray,
       isQuitting: () => this.quitting,
@@ -283,6 +286,7 @@ class TranslateClipApp {
 
     if (next.uiLanguage !== previous.uiLanguage) {
       this.translator = createTranslator(resolveUiLanguage(next))
+      this.windowManager.refreshWindowTitles()
     }
 
     if (next.theme !== previous.theme || nativeTheme.themeSource !== next.theme) {

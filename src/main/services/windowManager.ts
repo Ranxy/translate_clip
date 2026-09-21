@@ -3,6 +3,7 @@ import { BrowserWindow, Menu, app, nativeTheme, screen, shell, type MenuItemCons
 import { OVERLAY_EDGE_MARGIN } from '@shared/constants'
 import type { AppConfig, RendererEventMap } from '@shared/types'
 
+import type { Translator } from '../i18n'
 import type { Logger } from './logStore'
 import type { WindowKind, WindowStateStore } from './windowStateStore'
 
@@ -56,6 +57,14 @@ export interface WindowManagerOptions {
   devServerUrl: string | undefined
   windowStateStore: WindowStateStore
   getConfig: () => AppConfig
+  /**
+   * Main-process translator for window titles.
+   *
+   * Read at call time rather than captured, so a title refresh after an interface
+   * language change picks up the new one. The settings window is framed, which
+   * makes its title the one piece of chrome the renderer cannot localize.
+   */
+  translate: Translator
   log: Logger
   /** True while the app should stay alive in the tray after the overlay is closed. */
   shouldKeepRunningInTray: () => boolean
@@ -119,6 +128,34 @@ export class WindowManager {
 
   constructor(private readonly options: WindowManagerOptions) {}
 
+  /* ── Window chrome ───────────────────────────────────────────────── */
+
+  /** Title for a window, in the current interface language. */
+  private windowTitle(kind: RendererView): string {
+    return kind === 'settings'
+      ? `${this.options.translate('app.name')} — ${this.options.translate('settings.title')}`
+      : this.options.translate('app.name')
+  }
+
+  /**
+   * Re-applies every window title after an interface-language change.
+   *
+   * The renderer localizes everything *inside* its windows, but a framed window's
+   * title bar belongs to the OS — without this the settings window would keep
+   * reading "Settings" in English after the user switched to Japanese.
+   */
+  refreshWindowTitles(): void {
+    const apply = (window: BrowserWindow | null, kind: RendererView) => {
+      if (window && !window.isDestroyed()) {
+        window.setTitle(this.windowTitle(kind))
+      }
+    }
+
+    apply(this.getOverlayWindow(), 'overlay')
+    apply(this.getSettingsWindow(), 'settings')
+    apply(this.getOnboardingWindow(), 'onboarding')
+  }
+
   /* ── Overlay ─────────────────────────────────────────────────────── */
 
   getOverlayWindow(): BrowserWindow | null {
@@ -150,7 +187,7 @@ export class WindowManager {
       skipTaskbar: true,
       hasShadow: false,
       backgroundColor: '#00000000',
-      title: 'TranslateClip',
+      title: this.options.translate('app.name'),
       webPreferences: this.createWebPreferences()
     })
 
@@ -373,7 +410,7 @@ export class WindowManager {
       minWidth: 640,
       minHeight: 560,
       show: false,
-      title: 'TranslateClip Settings',
+      title: this.windowTitle('settings'),
       backgroundColor: this.getWindowBackgroundColor(),
       autoHideMenuBar: true,
       webPreferences: this.createWebPreferences()
@@ -425,7 +462,7 @@ export class WindowManager {
       fullscreenable: false,
       show: false,
       frame: false,
-      title: 'TranslateClip Setup',
+      title: this.windowTitle('onboarding'),
       backgroundColor: this.getWindowBackgroundColor(),
       webPreferences: this.createWebPreferences()
     })

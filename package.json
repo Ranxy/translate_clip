@@ -13,6 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "i18n:check": "node scripts/check-i18n.mjs && node scripts/sort-i18n-keys.mjs --check",
+    "i18n:sort": "node scripts/sort-i18n-keys.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "self-check": "npm run build && electron . --self-check",
     "pack": "npm run build && electron-builder --dir",

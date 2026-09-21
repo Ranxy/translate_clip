@@ -11,24 +11,18 @@ export const zhCN = {
     tagline: '复制即翻译'
   },
   common: {
-    on: '开启',
-    off: '关闭',
     save: '保存',
-    saved: '已保存',
-    cancel: '取消',
     close: '关闭',
-    copy: '复制',
     copied: '已复制',
     retry: '重试',
     errorTitle: '出错了',
     dismiss: '知道了',
-    loading: '加载中…',
-    planned: '计划中',
-    reset: '恢复默认'
+    loading: '加载中…'
   },
   overlay: {
     title: '剪译',
     emptyTitle: '复制任意文本即可翻译',
+    emptyTitleShort: '复制即可翻译',
     emptyBody: '在其他应用里按 Ctrl+C,译文会自动出现在这里。',
     sourceLabel: '原文',
     translationLabel: '译文',
@@ -37,11 +31,9 @@ export const zhCN = {
     tabHistory: '历史',
     actionTranslateNow: '立即翻译剪贴板',
     actionTranslateShort: '立即翻译',
-    actionRetranslate: '重译',
     actionCopy: '复制译文',
+    actionCopyShort: '复制',
     actionClear: '清空',
-    actionSwapDirection: '对调方向',
-    actionPin: '收藏',
     collapse: '折叠',
     expand: '展开',
     hide: '隐藏浮层',
@@ -84,9 +76,7 @@ export const zhCN = {
     }
   },
   activity: {
-    accepted: '已捕获 {{count}} 字符',
     skipped: '已跳过:{{reason}}',
-    idle: '等待复制',
     reasons: {
       disabled: '监听已暂停',
       empty: '内容为空',
@@ -137,6 +127,7 @@ export const zhCN = {
       overlayFontSizeHint: '整块浮层按比例缩放（含按钮与内边距）。',
       uiLanguage: '界面语言',
       uiLanguageSystem: '跟随系统',
+      uiLanguageSystemResolved: '跟随系统（当前：{{language}}）',
       behavior: '行为',
       closeToTray: '关闭浮层时保留在托盘',
       closeToTrayHint: '关闭后应用继续监听剪贴板,从托盘可重新打开浮层。',
@@ -302,12 +293,13 @@ export const zhCN = {
   },
   onboarding: {
     title: '欢迎使用剪译',
-    subtitle: '两步就能开始:确定翻译方向,接入翻译服务。',
     skip: '跳过',
     finish: '完成',
     next: '下一步',
     back: '上一步',
     stepLabel: '第 {{current}} / {{total}} 步',
+    uiLanguage: '界面语言',
+    uiLanguageHint: '默认跟随系统语言，之后可以在设置里修改。',
     directionTitle: '翻译方向',
     directionBody: '决定什么内容被翻译成什么语言。之后随时可以在设置里修改。',
     target: '翻译成',

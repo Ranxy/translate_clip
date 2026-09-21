@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { APP_LIMITS, LANGUAGE_OPTIONS } from '@shared/constants'
-import type { DirectionMode } from '@shared/types'
+import type { DirectionMode, UiLanguage } from '@shared/types'
 
+import { uiLanguageHint, uiLanguageSelectOptions } from '../../i18n/languageOptions'
 import { useAppState, useAppStore } from '../../store/appStore'
 import { cn, dragRegion, noDragRegion } from '../../utils/cn'
 import { ProvidersPage } from '../settings/ProvidersPage'
@@ -66,6 +67,22 @@ export function OnboardingShell() {
     t('onboarding.clipboardTitle'),
     t('onboarding.integrationTitle')
   ]
+
+  /**
+   * Applies the interface language the moment it is picked, before any step is
+   * committed.
+   *
+   * This screen is the one place where the user cannot yet read the surrounding
+   * text on purpose, so waiting for "Next" would be a poor first impression —
+   * and it doubles as the most direct proof that every bundle is wired up.
+   *
+   * The value is deliberately *not* kept in `draft`: the store owns it, and a
+   * local copy would be written back by `persistStep` — silently undoing a change
+   * made from the settings window while the wizard was open.
+   */
+  const selectUiLanguage = (value: UiLanguage): void => {
+    void store.updateConfig({ uiLanguage: value })
+  }
 
   const persistStep = async (): Promise<void> => {
     if (step === 0) {
@@ -157,6 +174,21 @@ export function OnboardingShell() {
       <main className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {step === 0 ? (
           <div className="flex flex-col gap-1">
+            <Field
+              label={t('onboarding.uiLanguage')}
+              hint={uiLanguageHint(t, config.uiLanguage) ?? t('onboarding.uiLanguageHint')}
+              className="mb-2 border-b border-border pb-2.5"
+            >
+              <Select
+                className="w-60"
+                data-ui-language
+                value={config.uiLanguage}
+                disabled={busy}
+                onValueChange={(value) => selectUiLanguage(value as UiLanguage)}
+                options={uiLanguageSelectOptions(t)}
+              />
+            </Field>
+
             <h1 className="text-[15px] font-semibold">{t('onboarding.title')}</h1>
             <p className="mb-2 text-[12.5px] leading-relaxed text-muted">{t('onboarding.directionBody')}</p>
 

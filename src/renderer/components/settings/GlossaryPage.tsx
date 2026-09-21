@@ -220,6 +220,7 @@ export function GlossaryPage() {
             <div key={`${row.language}-${index}`} className="flex items-center gap-2">
               <Select
                 className="w-40"
+                aria-label={t('settings.glossary.language')}
                 value={row.language}
                 onValueChange={(value) =>
                   setDraft((current) => ({
@@ -231,6 +232,7 @@ export function GlossaryPage() {
               />
               <TextInput
                 value={row.variants}
+                aria-label={t('settings.glossary.variants')}
                 placeholder={t('settings.glossary.variantsPlaceholder')}
                 spellCheck={false}
                 onChange={(event) =>

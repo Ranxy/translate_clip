@@ -113,7 +113,7 @@ export function HistoryPanel({ active }: { active: boolean }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-1.5 border-b border-border px-3 py-2">
+      <div data-history-search className="flex shrink-0 items-center gap-1.5 border-b border-border px-3 py-2">
         <span className="relative flex-1">
           <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-faint">
             <IconSearch />
@@ -188,14 +188,19 @@ export function HistoryPanel({ active }: { active: boolean }) {
         </ul>
       )}
 
-      <div className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-1.5">
+      <div data-history-actions className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border px-3 py-1.5">
         {hasMore ? (
-          <Button size="sm" variant="ghost" disabled={loading} onClick={() => void fetchPage('append')}>
+          <Button size="sm" variant="ghost" className="shrink-0" disabled={loading} onClick={() => void fetchPage('append')}>
             {t('overlay.history.loadMore')}
           </Button>
         ) : null}
-        <span className="flex-1" />
-        <Button size="sm" variant="ghost" className="text-danger" disabled={loading || items.length === 0} onClick={() => void clear()}>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="ml-auto shrink-0 text-danger"
+          disabled={loading || items.length === 0}
+          onClick={() => void clear()}
+        >
           {t('overlay.history.clear')}
         </Button>
       </div>

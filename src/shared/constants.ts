@@ -1,3 +1,4 @@
+import type { SupportedLocale } from './locales'
 import type { AppConfig, LlmProviderId } from './types'
 
 /* ── Language catalogue ────────────────────────────────────────────── */
@@ -55,7 +56,14 @@ export function baseLanguage(value: string): string {
   return value.trim().toLowerCase().split(/[-_]/u)[0] ?? value.trim().toLowerCase()
 }
 
-export function languageLabel(value: string, locale: 'zh-CN' | 'en'): string {
+/**
+ * Names a translation language in the interface language.
+ *
+ * The catalogue only carries the native and English names, so Chinese gets the
+ * native one and every other interface language falls back to the English name —
+ * which is why the parameter is the whole locale catalogue rather than a pair.
+ */
+export function languageLabel(value: string, locale: SupportedLocale): string {
   const option = getLanguageOption(value)
   if (!option) {
     return value

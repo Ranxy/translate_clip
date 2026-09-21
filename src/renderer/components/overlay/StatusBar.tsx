@@ -41,7 +41,7 @@ export function StatusBar() {
       : null
 
   return (
-    <footer className="flex items-center gap-2 border-t border-border px-3 py-1.5 text-[11px] text-muted">
+    <footer data-status-bar className="flex items-center gap-2 border-t border-border px-3 py-1.5 text-[11px] text-muted">
       {/* The status word must not wrap: with a skip reason and both toggles on screen this row is
           at its width, and a wrapped word grew the whole bar to two lines. Everything flexible
           here truncates instead. */}

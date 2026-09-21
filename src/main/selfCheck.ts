@@ -2,6 +2,8 @@ import { BrowserWindow, nativeImage } from 'electron'
 import { access, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
+import { SUPPORTED_LOCALES } from '@shared/locales'
+
 import type { Logger } from './services/logStore'
 import { startStubServer, type StubServer } from './testing/stubServer'
 
@@ -47,6 +49,9 @@ const VIEWS: SelfCheckTarget[] = [
 
 const PIPELINE_SAMPLE_TEXT = 'Hello clipboard pipeline'
 const TRANSLATION_MARKER = 'self-check translation marker'
+
+/** Every shipped interface language, plus the "follow system" entry above them. */
+const UI_LANGUAGE_OPTION_COUNT = SUPPORTED_LOCALES.length + 1
 
 /** Provider brand names, so the assertion does not depend on the UI language. */
 const PROVIDER_MARKER = 'DeepSeek'
@@ -113,6 +118,121 @@ async function checkOnboardingFlow(window: BrowserWindow, log: Logger): Promise<
 
     return { name, ok: true, detail: 'four steps present; direction ⇄ provider navigation works' }
   } catch (error) {
+    return { name, ok: false, detail: (error as Error).message }
+  }
+}
+
+/**
+ * Picks an interface language from the wizard's first step and back again.
+ *
+ * The first step is the one screen a user cannot skip, and it is also the only
+ * place where the interface language has to be changeable *before* anything else
+ * makes sense. Four things have to hold at once, and only a real render shows
+ * them: the picker offers every shipped locale and defaults to "follow system",
+ * choosing one re-renders the window in it (that is the whole point of the i18n
+ * wiring), the choice reaches the config rather than only local state, and the
+ * wizard does not write a stale copy back when a step is committed — the language
+ * is applied immediately, so the step's own "next" must leave it alone.
+ *
+ * The original setting is put back, so a diagnostic run leaves no trace.
+ */
+async function checkOnboardingLanguage(window: BrowserWindow, log: Logger): Promise<SelfCheckEntry> {
+  const name = 'onboarding language picker'
+
+  try {
+    const result = (await window.webContents.executeJavaScript(`(async () => {
+      const select = document.querySelector('[data-ui-language]')
+      if (!select) return { found: false }
+
+      const original = (await window.translateClip.getBootstrapData()).config.uiLanguage
+      const options = [...select.options].map((option) => option.value)
+      const initial = select.value
+
+      select.value = 'ja'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+
+      const deadline = Date.now() + 5000
+      let translated = false
+
+      while (Date.now() < deadline) {
+        if (document.documentElement.lang === 'ja' && document.body.innerText.includes('ようこそ')) {
+          translated = true
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+
+      const stored = (await window.translateClip.getBootstrapData()).config.uiLanguage
+      await window.translateClip.updateConfig({ uiLanguage: original })
+
+      // The picker must follow the store from here on, not a copy it kept.
+      const followed = document.querySelector('[data-ui-language]').value
+
+      // Committing step 1 is what used to write the old language back.
+      document.querySelector('[data-action="next"]').click()
+      await new Promise((resolve) => setTimeout(resolve, 600))
+      const afterNext = (await window.translateClip.getBootstrapData()).config.uiLanguage
+      document.querySelector('[data-action="back"]').click()
+      await new Promise((resolve) => setTimeout(resolve, 300))
+
+      return { found: true, options, initial, stored, translated, followed, afterNext }
+    })()`)) as {
+      found: boolean
+      options?: string[]
+      initial?: string
+      stored?: string
+      translated?: boolean
+      followed?: string
+      afterNext?: string
+    }
+
+    if (!result.found) {
+      return { name, ok: false, detail: 'the first wizard step has no [data-ui-language] picker' }
+    }
+
+    if (result.options?.length !== UI_LANGUAGE_OPTION_COUNT) {
+      return {
+        name,
+        ok: false,
+        detail: `the picker listed ${result.options?.length ?? 0} languages, expected ${UI_LANGUAGE_OPTION_COUNT} (${result.options?.join(', ')})`
+      }
+    }
+
+    if (result.initial !== 'system') {
+      return { name, ok: false, detail: `the picker defaulted to "${String(result.initial)}" instead of following the system` }
+    }
+
+    if (!result.translated) {
+      return { name, ok: false, detail: 'choosing Japanese did not re-render the wizard in Japanese' }
+    }
+
+    if (result.stored !== 'ja') {
+      return { name, ok: false, detail: `choosing a language stored "${String(result.stored)}" instead of "ja"` }
+    }
+
+    if (result.followed !== result.initial) {
+      return {
+        name,
+        ok: false,
+        detail: `the picker kept showing "${String(result.followed)}" after the config was set back to "${String(result.initial)}"`
+      }
+    }
+
+    if (result.afterNext !== result.initial) {
+      return {
+        name,
+        ok: false,
+        detail: `committing the first step rewrote the interface language as "${String(result.afterNext)}"`
+      }
+    }
+
+    return {
+      name,
+      ok: true,
+      detail: `all ${SUPPORTED_LOCALES.length} locales offered, "system" by default, switching re-renders and persists immediately, and committing the step leaves it alone`
+    }
+  } catch (error) {
+    log.warn('self-check language picker probe failed', error)
     return { name, ok: false, detail: (error as Error).message }
   }
 }
@@ -757,6 +877,321 @@ async function checkShortcutRecording(window: BrowserWindow): Promise<SelfCheckE
   }
 }
 
+/** Rows of the overlay that carry translated text. */
+const OVERLAY_ROWS: ReadonlyArray<{ selector: string; label: string; singleLine: boolean }> = [
+  { selector: '[data-overlay-header]', label: 'header', singleLine: true },
+  { selector: '[data-overlay-actions]', label: 'action row', singleLine: true },
+  { selector: '[data-status-bar]', label: 'status bar', singleLine: true },
+  { selector: '[data-overlay-card]', label: 'card', singleLine: false },
+  { selector: '[data-history-search]', label: 'history search', singleLine: true },
+  { selector: '[data-history-actions]', label: 'history actions', singleLine: true }
+]
+
+/**
+ * The two widths that matter: the default one, and the narrowest the user may drag
+ * the overlay to (`MIN_OVERLAY_WIDTH` in windowManager).
+ */
+const OVERLAY_MEASUREMENTS = [
+  { label: 'default', width: 380, height: 520, requireSingleLine: true },
+  { label: 'minimum', width: 300, height: 420, requireSingleLine: false }
+] as const
+
+/**
+ * Measures the overlay in every shipped language, at its default and narrowest width.
+ *
+ * Translations are not the same length: "Copy translation" fits a 380 DIP overlay and
+ * "Копировать перевод" did not, so a layout tuned on Chinese clipped Russian and
+ * English buttons and tabs — silently, because the card is `overflow-hidden`. Two
+ * separate promises are checked here, in every language and on both tabs:
+ *
+ *   - nothing is ever clipped, down to the narrowest width the window allows, and
+ *   - at the default width every row still lays out on one line, so the overlay looks
+ *     the same in all four languages rather than merely staying readable in each.
+ *
+ * The status bar is put into its longest state first (a copy the filter rejected, so
+ * the reason and the phase and the provider and both toggles are all on screen), and
+ * the text size is pinned so this measures the language rather than the zoom setting.
+ */
+async function checkOverlayLocalization(window: BrowserWindow, log: Logger): Promise<SelfCheckEntry> {
+  const name = 'overlay localization'
+  const originalSize = window.getContentSize()
+  const overflow: string[] = []
+  const wrapped: string[] = []
+  const missing: string[] = []
+
+  // Captured before anything is touched: the probe sets the interface language, the
+  // text size and the clipboard filter, and reading the config back afterwards would
+  // read the probe's own values and restore nothing.
+  const original = (await window.webContents.executeJavaScript(
+    `(async () => {
+      const config = (await window.translateClip.getBootstrapData()).config
+      return { uiLanguage: config.uiLanguage, overlay: config.overlay, minSourceChars: config.minSourceChars }
+    })()`
+  )) as { uiLanguage: string; overlay: Record<string, unknown>; minSourceChars: number }
+
+  /** Set when the config could not be put back; a probe that edits user data must say so. */
+  let restoreFailure: string | null = null
+
+  /** Loops the languages (and both tabs) at whatever size the window currently has. */
+  const measure = (requireSingleLine: boolean): string => `(async () => {
+    const ROWS = ${JSON.stringify(OVERLAY_ROWS)}
+    const LOCALES = ${JSON.stringify(SUPPORTED_LOCALES)}
+    const REQUIRE_SINGLE_LINE = ${String(requireSingleLine)}
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 80))
+    const overflow = []
+    const wrapped = []
+    const missing = []
+
+    /**
+     * True when the row took more than one line.
+     *
+     * With centered items and no wrap, a row is exactly as tall as its tallest child
+     * plus its own padding, whatever the children's individual heights are; wrapping
+     * adds a whole second line, so the comparison is exact rather than a guess about
+     * where the children's tops land.
+     */
+    const wrappedRow = (element) => {
+      const style = getComputedStyle(element)
+      const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+      const heights = [...element.children]
+        .filter((child) => child.getBoundingClientRect().width > 0)
+        .map((child) => child.getBoundingClientRect().height)
+      const tallest = heights.length > 0 ? Math.max(...heights) : 0
+
+      if (tallest === 0) {
+        return false
+      }
+
+      return element.getBoundingClientRect().height > tallest + padding + 2
+    }
+
+    const showTab = async (tab) => {
+      const button = document.querySelector('[data-tab="' + tab + '"]')
+      if (button) button.click()
+      await settle()
+    }
+
+    /**
+     * Waits for the layout the config asks for, instead of assuming it landed.
+     *
+     * Both layouts are the same React tree with an early return, so the swap is one
+     * render — but measuring on a fixed delay is how a probe reports "rows missing"
+     * for a reason that has nothing to do with the thing it is testing.
+     */
+    const applyLayout = async (collapsed) => {
+      const wanted = collapsed ? '[data-collapsed-bar]' : '[data-overlay-card]'
+      const unwanted = collapsed ? '[data-overlay-card]' : '[data-collapsed-bar]'
+      const config = (await window.translateClip.getBootstrapData()).config
+
+      await window.translateClip.updateConfig({ overlay: { ...config.overlay, collapsed } })
+
+      const deadline = Date.now() + 3000
+      while (Date.now() < deadline) {
+        if (document.querySelector(wanted) && !document.querySelector(unwanted)) {
+          await settle()
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, 30))
+      }
+
+      missing.push('the ' + (collapsed ? 'collapsed bar' : 'expanded card') + ' never rendered')
+      return false
+    }
+
+    const setCollapsed = (collapsed) => applyLayout(collapsed)
+
+    /** How many lines a clamped text span actually rendered. */
+    const textLines = (element) => {
+      const lineHeight = parseFloat(getComputedStyle(element).lineHeight) || 20
+      return Math.max(Math.round(element.scrollHeight / lineHeight), 1)
+    }
+
+    // Pins the text size so this measures the language rather than the zoom setting,
+    // then waits for the expanded layout the loop below starts from.
+    await window.translateClip.updateConfig({ overlay: { ...(await window.translateClip.getBootstrapData()).config.overlay, collapsed: false, fontSize: 14 } })
+    await applyLayout(false)
+
+    // Restored by the same script that changes it, so the language can never outlive
+    // this call even if the caller's own restore is lost.
+    const restoreLanguage = (await window.translateClip.getBootstrapData()).config.uiLanguage
+
+    // The longest the status bar ever gets: a copy the filter rejected, which adds
+    // "Skipped: <reason>" next to the phase, the provider and both toggles. The
+    // minimum length is pinned alongside the text size so a one-character probe can
+    // never reach a provider and spend the user's quota. It also leaves the overlay
+    // with no source and no translation, which is the state the collapsed bar's idle
+    // hint is measured in.
+    await window.translateClip.updateConfig({ minSourceChars: 2 })
+    await window.translateClip.debugInjectClipboard('x')
+    await settle()
+
+    for (const locale of LOCALES) {
+      await window.translateClip.updateConfig({ uiLanguage: locale })
+
+      const deadline = Date.now() + 3000
+      while (document.documentElement.lang !== locale && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 30))
+      }
+
+      await setCollapsed(false)
+
+      for (const tab of ['current', 'history']) {
+        await showTab(tab)
+        const where = locale + ' ' + tab + ' tab'
+
+        // Checked once per tab rather than per row: when the card is gone, six "row
+        // missing" lines say less than one line saying what is on screen instead.
+        if (!document.querySelector('[data-overlay-card]')) {
+          missing.push(
+            where +
+              ' has no overlay card — ' +
+              (document.querySelector('[data-collapsed-bar]')
+                ? 'the collapsed bar is showing instead'
+                : 'body: ' + document.body.innerText.replace(/\s+/g, ' ').slice(0, 80))
+          )
+          continue
+        }
+
+        for (const row of ROWS) {
+          const element = document.querySelector(row.selector)
+
+          if (!element) {
+            // The history rows only exist while the history tab is showing.
+            if (tab === 'history' || !row.selector.includes('history')) {
+              missing.push(where + ' ' + row.label)
+            }
+            continue
+          }
+
+          const excess = element.scrollWidth - element.clientWidth
+          if (excess > 1) {
+            overflow.push(where + ' ' + row.label + ' clipped by ' + excess + 'px')
+          }
+
+          if (REQUIRE_SINGLE_LINE && row.singleLine && wrappedRow(element)) {
+            wrapped.push(where + ' ' + row.label)
+          }
+        }
+      }
+
+      // The collapsed bar is the overlay's least intrusive form: one line of preview
+      // and three icon buttons. Its idle hint has to stay on that one line.
+      await setCollapsed(true)
+
+      const bar = document.querySelector('[data-collapsed-bar]')
+      const text = document.querySelector('[data-collapsed-text]')
+
+      if (!bar || !text) {
+        missing.push(locale + ' collapsed bar')
+      } else {
+        const excess = bar.scrollWidth - bar.clientWidth
+        if (excess > 1) {
+          overflow.push(locale + ' collapsed bar clipped by ' + excess + 'px')
+        }
+
+        const lines = textLines(text)
+        if (REQUIRE_SINGLE_LINE && lines > 1) {
+          wrapped.push(locale + ' collapsed bar idle hint (' + lines + ' lines)')
+        }
+      }
+    }
+
+    await window.translateClip.updateConfig({ uiLanguage: restoreLanguage })
+
+    return { overflow, wrapped, missing }
+  })()`
+
+  try {
+    // Pinned before the first measurement so the reflow is already done.
+    await window.webContents.executeJavaScript(
+      `(async () => {
+        const config = (await window.translateClip.getBootstrapData()).config
+        await window.translateClip.updateConfig({ overlay: { ...config.overlay, collapsed: false, fontSize: 14 } })
+      })()`
+    )
+
+    for (const scenario of OVERLAY_MEASUREMENTS) {
+      window.setContentSize(scenario.width, scenario.height)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+
+      const result = (await window.webContents.executeJavaScript(measure(scenario.requireSingleLine))) as {
+        overflow: string[]
+        wrapped: string[]
+        missing: string[]
+      }
+
+      const at = `at ${scenario.width} DIP (${scenario.label})`
+      overflow.push(...result.overflow.map((entry) => `${at}: ${entry}`))
+      wrapped.push(...result.wrapped.map((entry) => `${at}: ${entry}`))
+      missing.push(...result.missing.map((entry) => `${at}: ${entry}`))
+    }
+  } catch (error) {
+    return { name, ok: false, detail: (error as Error).message }
+  } finally {
+    window.setContentSize(originalSize[0], originalSize[1])
+
+    // Puts back exactly what was captured above, not whatever the probe left behind,
+    // and checks that it stuck: a silent restore failure would leave the user's
+    // interface in a language they never chose, and would then look like the *next*
+    // run's failure rather than this one's.
+    try {
+      await window.webContents.executeJavaScript(
+        `window.translateClip.updateConfig(${JSON.stringify(original)})`
+      )
+
+      const after = (await window.webContents.executeJavaScript(
+        `(async () => {
+          const config = (await window.translateClip.getBootstrapData()).config
+          return {
+            uiLanguage: config.uiLanguage,
+            minSourceChars: config.minSourceChars,
+            collapsed: config.overlay.collapsed,
+            fontSize: config.overlay.fontSize
+          }
+        })()`
+      )) as { uiLanguage: string; minSourceChars: number; collapsed: boolean; fontSize: number }
+
+      const expected = {
+        uiLanguage: original.uiLanguage,
+        minSourceChars: original.minSourceChars,
+        collapsed: original.overlay.collapsed,
+        fontSize: original.overlay.fontSize
+      }
+
+      if (JSON.stringify(after) !== JSON.stringify(expected)) {
+        restoreFailure = `the config was not restored: ${JSON.stringify(after)} should be ${JSON.stringify(expected)}`
+      }
+    } catch (error) {
+      restoreFailure = `the config could not be restored: ${(error as Error).message}`
+    }
+  }
+
+  if (restoreFailure) {
+    log.warn(`self-check overlay localization: ${restoreFailure}`)
+    return { name, ok: false, detail: restoreFailure }
+  }
+
+  if (missing.length > 0) {
+    return { name, ok: false, detail: `rows missing from the overlay: ${missing.join(', ')}` }
+  }
+
+  if (overflow.length > 0) {
+    log.warn(`self-check overlay localization clipped: ${overflow.join('; ')}`)
+    return { name, ok: false, detail: overflow.join('; ') }
+  }
+
+  if (wrapped.length > 0) {
+    log.warn(`self-check overlay localization wrapped: ${wrapped.join('; ')}`)
+    return { name, ok: false, detail: `not on one line at the default width: ${wrapped.join('; ')}` }
+  }
+
+  return {
+    name,
+    ok: true,
+    detail: `${SUPPORTED_LOCALES.length} languages, both tabs: one line at the default width, nothing clipped at the ${OVERLAY_MEASUREMENTS[1].width} DIP minimum`
+  }
+}
+
 async function fileExists(path: string): Promise<boolean> {
   try {
     await access(path)
@@ -909,6 +1344,11 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
         const churn = await checkConfigChurn(window)
         push(churn.name, churn.ok, churn.detail)
 
+        // Runs last among the overlay probes: it changes the window size, the text
+        // size, the interface language and the clipboard activity.
+        const localization = await checkOverlayLocalization(window, options.log)
+        push(localization.name, localization.ok, localization.detail)
+
         // Puts the user's layout back exactly as it was found.
         if (overlayConfig?.collapsed) {
           await setCollapsed(true)
@@ -921,8 +1361,9 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
           await checkSettingsTab(
             window,
             'general',
-            "document.querySelectorAll('[data-settings-section=\"overlay\"] input[type=number]').length === 2",
-            'the overlay appearance controls rendered'
+            "document.querySelectorAll('[data-settings-section=\"overlay\"] input[type=number]').length === 2" +
+              ` && document.querySelectorAll('[data-ui-language] option').length === ${UI_LANGUAGE_OPTION_COUNT}`,
+            'the overlay appearance controls and the interface-language picker rendered'
           ),
           await checkSettingsTab(
             window,
@@ -960,8 +1401,13 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
       }
 
       if (target.view === 'onboarding' && bridge === 'object' && root.children > 0) {
+        // The wizard probe walks forward and back and leaves step 1 showing; the
+        // language probe then drives the picker on that same step.
         const wizard = await checkOnboardingFlow(window, options.log)
         push(wizard.name, wizard.ok, wizard.detail)
+
+        const language = await checkOnboardingLanguage(window, options.log)
+        push(language.name, language.ok, language.detail)
       }
     } catch (error) {
       push(target.label, false, (error as Error).message)
