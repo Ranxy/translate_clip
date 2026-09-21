@@ -795,14 +795,22 @@ class TranslateClipApp {
         this.updateConfig({ overlay: { ...this.config.overlay, collapsed } }).then(() => undefined),
       'overlay:setClickThrough': (clickThrough: boolean) =>
         this.updateConfig({ overlay: { ...this.config.overlay, clickThrough } }).then(() => undefined),
-      'overlay:setOpacity': (opacity: number) =>
-        this.updateConfig({ overlay: { ...this.config.overlay, opacity } }).then(() => undefined),
+      // Not a config write: this is the live half of the opacity slider, applied straight to the
+      // window so it follows the thumb. The value is persisted by `app:updateConfig` when the
+      // drag ends, which keeps a drag from rewriting config.json on every step.
+      'overlay:previewOpacity': (opacity: number) => this.windowManager.setOverlayOpacity(opacity),
       'overlay:resizeBy': (deltaY: number) => this.windowManager.resizeOverlayBy(deltaY),
       'overlay:hide': () => this.windowManager.hideOverlay(),
       'overlay:show': () => this.windowManager.showOverlay(),
 
       'window:openSettings': () => this.windowManager.openSettingsWindow(),
-      'window:closeSettings': () => this.windowManager.closeSettingsWindow(),
+      'window:closeSettings': () => {
+        this.windowManager.closeSettingsWindow()
+        // The opacity slider previews straight onto the window, so a drag that was abandoned
+        // rather than released (the window closed mid-drag) would leave the overlay showing a
+        // value the config never stored. Closing the settings window puts the stored one back.
+        this.windowManager.setOverlayOpacity(this.config.overlay.opacity)
+      },
       'window:openOnboarding': () =>
         this.windowManager.openOnboardingWindow(() => {
           this.logger.warn('onboarding window closed without an explicit finish; first-run setup stays pending')

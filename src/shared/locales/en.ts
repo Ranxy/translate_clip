@@ -118,6 +118,7 @@ export const en: LocaleResource = {
       overlaySection: 'Overlay',
       overlayOpacity: 'Overlay opacity',
       overlayOpacityHint: 'Lower gets out of the way, but the translation is harder to read.',
+      overlayOpacityUnsupported: 'Not applied on Linux: Electron cannot set window opacity there, so the overlay keeps its built-in translucency.',
       overlayOpaque: 'Use a solid background',
       overlayOpaqueHint: 'The translucent effect renders badly on some GPU drivers; turn this on if it does.',
       overlayFontSize: 'Overlay text size',

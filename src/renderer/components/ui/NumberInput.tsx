@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { cn } from '../../utils/cn'
+import { roundToStepPrecision } from '../../utils/number'
 
 export interface NumberInputProps {
   value: number
@@ -37,7 +38,7 @@ export function NumberInput({ value, min, max, step = 1, onCommit, className, ar
       return
     }
 
-    const clamped = Math.min(Math.max(Math.round(parsed), min), max)
+    const clamped = Math.min(Math.max(roundToStepPrecision(parsed, step), min), max)
     setDraft(String(clamped))
 
     if (clamped !== value) {

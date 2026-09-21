@@ -57,6 +57,9 @@ export function createCapabilityRegistry(log: Logger): CapabilityRegistry {
     tray: trayAvailable,
     globalShortcut: detectGlobalShortcutSupport(platform),
     keyring,
+    // `BrowserWindow.setOpacity` is documented as doing nothing on Linux, and the overlay's
+    // opacity setting rides on it — so the settings page must not offer it there.
+    overlayOpacity: platform === 'windows' || platform === 'macos',
     launchAtLogin: canManageLaunchAtLogin()
   })
 

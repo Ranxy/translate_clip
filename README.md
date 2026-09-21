@@ -119,8 +119,9 @@ without a keyring, the settings page says so plainly instead of pretending the k
 
 ## Settings, one line each
 
-**General** — interface language, theme, launch at login, close to tray, history limit, and buttons
-that open the data and log folders. **Clipboard** — watching, poll interval, length limits, ignore
+**General** — interface language, theme, the overlay's opacity (a slider that changes the overlay
+as you drag it) and text size, launch at login, close to tray, history limit, and buttons that open
+the data and log folders. **Clipboard** — watching, poll interval, length limits, ignore
 rules, single-token skipping, the reuse cache, auto-replace, request logging. **Providers** — as
 above. **Prompt** — the system prompt template, its variables, and a live preview. **Glossary** —
 forced translations, with JSON import and export. **Shortcuts** — the recorder. **About** — version,
@@ -156,7 +157,8 @@ app to a first run, wizard and all.
 - **Click-through makes the overlay unclickable.** That is what it is for; turn it off from the tray
   menu, and the overlay says so the moment you enable it.
 - **On Linux**, a Wayland session only lets a focused client read the clipboard, global shortcuts
-  reach X11 applications only, and the tray needs a StatusNotifier host. Windows is the primary
+  reach X11 applications only, and the tray needs a StatusNotifier host. Window transparency is not
+  available either, so the overlay's opacity slider is disabled there. Windows is the primary
   target.
 
 ## Documentation

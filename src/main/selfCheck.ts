@@ -472,6 +472,99 @@ async function checkSettingsTab(
 }
 
 /**
+ * Drags the overlay opacity slider and asserts the value actually reaches the config.
+ *
+ * This control is two-phase by design — applied to the overlay while the thumb moves, saved when
+ * it is released — so "the slider moved" would prove nothing on its own. What has to hold is that
+ * the *stored* value is the one the user let go on (the number field this replaced rounded every
+ * value in the 0.6–1 range up to 1, which is how the setting became impossible to change), and
+ * that the drag itself writes no config. Both are read back from the main process.
+ *
+ * The user's own opacity is put back at the end. On a platform whose windows cannot take an
+ * opacity at all the control is rendered disabled, which is reported as such rather than failed.
+ */
+async function checkOverlayOpacitySlider(window: BrowserWindow): Promise<SelfCheckEntry> {
+  const name = 'overlay opacity slider'
+
+  try {
+    const original = (await window.webContents.executeJavaScript(
+      '(async () => (await window.translateClip.getBootstrapData()).config.overlay.opacity)()'
+    )) as number
+
+    const target = original === 0.7 ? 0.9 : 0.7
+
+    const result = (await window.webContents.executeJavaScript(`(async () => {
+      const tab = document.querySelector('[data-settings-tab="general"]')
+      if (tab) tab.click()
+      await new Promise((resolve) => setTimeout(resolve, 250))
+
+      const slider = document.querySelector('[data-overlay-opacity]')
+      if (!slider) return { found: false }
+
+      // On a platform whose window manager cannot take an opacity (Linux), the control is
+      // rendered disabled and the settings page explains why. There is nothing to drag there.
+      if (slider.disabled) return { found: true, disabled: true }
+
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+      const before = (await window.translateClip.getBootstrapData()).config.overlay.opacity
+
+      // The drag: applied to the window, deliberately not written to the config.
+      await window.translateClip.previewOverlayOpacity(${target})
+      const afterPreview = (await window.translateClip.getBootstrapData()).config.overlay.opacity
+
+      // The release: this is the one that persists.
+      setter.call(slider, '${target}')
+      slider.dispatchEvent(new Event('input', { bubbles: true }))
+      slider.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 400))
+
+      const stored = (await window.translateClip.getBootstrapData()).config.overlay.opacity
+
+      return { found: true, disabled: false, before, afterPreview, stored, shown: Number(slider.value) }
+    })()`)) as {
+      found: boolean
+      disabled?: boolean
+      before?: number
+      afterPreview?: number
+      stored?: number
+      shown?: number
+    }
+
+    await window.webContents.executeJavaScript(
+      `(async () => { const overlay = (await window.translateClip.getBootstrapData()).config.overlay; return window.translateClip.updateConfig({ overlay: Object.assign({}, overlay, { opacity: ${original} }) }) })()`
+    )
+
+    if (!result.found) {
+      return { name, ok: false, detail: 'the settings window has no overlay opacity slider' }
+    }
+
+    if (result.disabled) {
+      return { name, ok: true, detail: 'this platform cannot set window opacity, so the slider is rendered disabled' }
+    }
+
+    if (result.afterPreview !== result.before) {
+      return {
+        name,
+        ok: false,
+        detail: `dragging the slider wrote the config (${String(result.before)} → ${String(result.afterPreview)})`
+      }
+    }
+
+    if (result.stored !== target) {
+      return { name, ok: false, detail: `releasing the slider stored ${String(result.stored)} instead of ${target}` }
+    }
+
+    return {
+      name,
+      ok: true,
+      detail: `the drag previewed ${target} without writing it, the release stored it, and the control shows ${String(result.shown)}`
+    }
+  } catch (error) {
+    return { name, ok: false, detail: (error as Error).message }
+  }
+}
+
+/**
  * Proves the whole translation path without a credential or a network call.
  *
  * A stub OpenAI-compatible endpoint is started on loopback, a throwaway profile
@@ -1361,9 +1454,10 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
           await checkSettingsTab(
             window,
             'general',
-            "document.querySelectorAll('[data-settings-section=\"overlay\"] input[type=number]').length === 2" +
+            "document.querySelectorAll('[data-settings-section=\"overlay\"] input[type=number]').length === 1" +
+              " && document.querySelector('[data-settings-section=\"overlay\"] input[type=range]') !== null" +
               ` && document.querySelectorAll('[data-ui-language] option').length === ${UI_LANGUAGE_OPTION_COUNT}`,
-            'the overlay appearance controls and the interface-language picker rendered'
+            'the overlay appearance controls (opacity slider, text size) and the interface-language picker rendered'
           ),
           await checkSettingsTab(
             window,
@@ -1398,6 +1492,9 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
 
         const recording = await checkShortcutRecording(window)
         push(recording.name, recording.ok, recording.detail)
+
+        const opacity = await checkOverlayOpacitySlider(window)
+        push(opacity.name, opacity.ok, opacity.detail)
       }
 
       if (target.view === 'onboarding' && bridge === 'object' && root.children > 0) {

@@ -568,6 +568,7 @@ interface AppConfig {
 - 几何持久化:沿用 eve-babel 的 `move`/`resize` 180ms debounce 落盘。
 - 高度:**默认固定**,内容内部滚动;渲染进程可经 `overlay:resizeBy(deltaY)` 请求微调(历史面板展开等场景复用 eve-babel 的 `resizeOverlayBody`)。
 - **鼠标穿透**:`setIgnoreMouseEvents(true, { forward: true })`;开启后浮层不可交互,必须能从托盘/快捷键关掉 —— 因此穿透状态下快捷键显隐仍然有效,并且启用时用系统通知提示一次(避免"点不到又不知道怎么关")。
+- **透明度**:`setOpacity(config.overlay.opacity)`,范围 0.6–1(与 `sanitizeConfig` 同一处夹取)。设置页的滑块拖动期间走 `overlay:previewOpacity` 即时改窗口、**不落盘**,松手才 `app:updateConfig` 写一次 —— 拖一次只写一次配置,滑块也不会被存储值拽回原位。**Linux 上 Electron 的 `setOpacity` 是空实现**(`@platform win32,darwin`),所以 `capabilities.overlayOpacity` 为 false,设置页把滑块置灰并说明原因,而不是留一个拖了没反应的控件。
 - 设置窗口:普通窗口(`frame: true`,720×760),`parent` 不设为浮层(浮层 `skipTaskbar` 且置顶,设为 parent 会有奇怪的 z-order 关系),模态性用 `show()` + `focus()` + 单实例复用实现。
 - **引导窗口(onboarding)**:`?view=onboarding`,640×560、`resizable: false`、居中、`alwaysOnTop: false`、`skipTaskbar: false`、无边框(自带标题栏与关闭按钮)。首启自动打开;关闭窗口等价于"稍后再说"(`onboardingCompleted` 置 true,但 Provider 未配置 → 浮层进入 `unconfigured` 引导态)。可从设置页「通用 → 重新运行初始向导」再次打开。
 
@@ -646,7 +647,7 @@ interface AppConfig {
 
 ### 6.2 设置窗口(720×760,左侧竖排 tab)
 
-1. **通用** — UI 语言、主题、开机自启、关闭到托盘、历史上限、数据目录/日志目录入口。
+1. **通用** — UI 语言、主题、浮层透明度(滑块:拖动即时预览、松手落盘)、浮层字号、不透明模式、开机自启、关闭到托盘、历史上限、数据目录/日志目录入口。
 2. **剪贴板** — 监听开关(暂停/恢复)、轮询间隔(滑块 + 说明延迟/CPU 取舍)、最小/最大长度、忽略正则(可增删 + 即时校验)、单 token 跳过、缓存开关 + TTL、LLM 调试日志。
 3. **Providers** — 复用 eve-babel 的交互骨架:左侧 provider 列表(OpenAI / DeepSeek / OpenRouter / Ollama / 自定义),右侧 profile 表单(API Key 掩码显示 + 显示/隐藏切换、Base URL、模型下拉 + 搜索、`拉取模型`、`测试连接`、设为当前)。Ollama 分支不显示 Key 字段,默认 `http://localhost:11434/v1`。
 4. **提示词** — 模板 textarea + 可用变量说明 + 右侧实时预览(用一段示例文本渲染最终 system prompt)。
@@ -715,7 +716,8 @@ glossary:import(json) / glossary:export() -> string
 shortcut:set(action, accelerator) -> { ok: boolean; error: string | null }
 shortcut:test(accelerator)         -> { ok: boolean; error: string | null }
 
-overlay:setCollapsed(bool) / overlay:setClickThrough(bool) / overlay:setOpacity(n) / overlay:resizeBy(deltaY)
+overlay:setCollapsed(bool) / overlay:setClickThrough(bool) / overlay:resizeBy(deltaY)
+overlay:previewOpacity(n)                                  // 拖动透明度滑块时的即时应用:直接改窗口、不写配置(松手才由 app:updateConfig 落盘)
 overlay:hide() / overlay:show()
 
 onboarding:complete() -> BootstrapPayload                  // 置 onboardingCompleted=true 并 flush 落盘
@@ -839,7 +841,7 @@ linux:
 | 集成(mock fetch) | `llmClient` + 队列 + 仓储 | 401/429/500/超时/中断路径 → 状态与历史落库正确 |
 | 手工(Windows 本机,dev) | `npm run dev` | 浮层视觉/交互/折叠(按内容自适应)/穿透/暂停/清空/自动替换、**首启引导四步(含用全新 userData 复现首启)**、设置页各表单、dev 注入剪贴板的端到端链路、真实剪贴板监听(前台/后台/多应用)、置顶层级、托盘、快捷键、重启后配置与窗口位置恢复 |
 | 手工(Windows 安装版) | `npm run dist:win` | NSIS 安装/卸载、开机自启、托盘图标、单实例 |
-| 静态 + 冒烟 | `npm run typecheck`、`npm run self-check` | 全量类型(干净);自检 `[self-check] PASSED`、`"ok": true` 共 28 条(资源 / asar 布局 / sql.js wasm / 剪贴板管线 / 真实翻译 / 全部设置页 / 向导) |
+| 静态 + 冒烟 | `npm run typecheck`、`npm run self-check` | 全量类型(干净);自检 `[self-check] PASSED`、`"ok": true` 共 31 条(资源 / asar 布局 / sql.js wasm / 剪贴板管线 / 真实翻译 / 全部设置页 / 浮层透明度滑块 / 向导) |
 | Linux(CI) | `ubuntu-latest` workflow | `typecheck + test`、AppImage / deb 出包;Linux 桌面的真实行为(托盘宿主、Wayland 快捷键)按 §12 的产品限制处理 |
 
 ### 10.4 一期验收标准

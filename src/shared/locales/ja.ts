@@ -118,6 +118,7 @@ export const ja: LocaleResource = {
       overlaySection: 'オーバーレイ',
       overlayOpacity: 'オーバーレイの不透明度',
       overlayOpacityHint: '下げるほど視界を遮りませんが、訳文は読みにくくなります。',
+      overlayOpacityUnsupported: 'Linux では反映されません。Electron がウィンドウの透明度を設定できないため、オーバーレイは標準の半透明表示のままです。',
       overlayOpaque: '不透明な背景を使う',
       overlayOpaqueHint: '半透明の効果が一部の GPU ドライバーで正しく描画されない場合に有効にします。',
       overlayFontSize: 'オーバーレイの文字サイズ',

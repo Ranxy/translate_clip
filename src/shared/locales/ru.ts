@@ -118,6 +118,7 @@ export const ru: LocaleResource = {
       overlaySection: 'Окно перевода',
       overlayOpacity: 'Непрозрачность окна',
       overlayOpacityHint: 'Чем ниже, тем меньше мешает, но читать перевод сложнее.',
+      overlayOpacityUnsupported: 'В Linux не применяется: Electron не может задать прозрачность окна, и оверлей сохраняет свою штатную полупрозрачность.',
       overlayOpaque: 'Использовать непрозрачный фон',
       overlayOpaqueHint: 'Полупрозрачный эффект плохо отрисовывается на некоторых драйверах GPU — включите это, если заметили проблему.',
       overlayFontSize: 'Размер текста в окне',

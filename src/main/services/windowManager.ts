@@ -1,6 +1,6 @@
 import { BrowserWindow, Menu, app, nativeTheme, screen, shell, type MenuItemConstructorOptions } from 'electron'
 
-import { OVERLAY_EDGE_MARGIN } from '@shared/constants'
+import { APP_LIMITS, OVERLAY_EDGE_MARGIN } from '@shared/constants'
 import type { AppConfig, RendererEventMap } from '@shared/types'
 
 import type { Translator } from '../i18n'
@@ -323,13 +323,21 @@ export class WindowManager {
     window.setIgnoreMouseEvents(enabled, { forward: true })
   }
 
+  /**
+   * Applies an opacity to the overlay window.
+   *
+   * The clamp is the same one the config is sanitized with, so a value that reaches this from
+   * the settings renderer — where a slider is dragged — can only ever land where the stored
+   * setting is allowed to be.
+   */
   setOverlayOpacity(opacity: number): void {
     const window = this.getOverlayWindow()
-    if (!window) {
+    if (!window || !Number.isFinite(opacity)) {
       return
     }
 
-    window.setOpacity(Math.min(Math.max(opacity, 0.2), 1))
+    const { min, max } = APP_LIMITS.overlayOpacity
+    window.setOpacity(Math.min(Math.max(opacity, min), max))
   }
 
   resizeOverlayBy(deltaY: number): void {

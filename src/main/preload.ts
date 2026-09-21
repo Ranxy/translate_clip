@@ -80,7 +80,7 @@ const api: TranslateClipApi = {
 
   setOverlayCollapsed: (collapsed: boolean) => ipcRenderer.invoke('overlay:setCollapsed', collapsed),
   setOverlayClickThrough: (clickThrough: boolean) => ipcRenderer.invoke('overlay:setClickThrough', clickThrough),
-  setOverlayOpacity: (opacity: number) => ipcRenderer.invoke('overlay:setOpacity', opacity),
+  previewOverlayOpacity: (opacity: number) => ipcRenderer.invoke('overlay:previewOpacity', opacity),
   resizeOverlayBy: (deltaY: number) => ipcRenderer.invoke('overlay:resizeBy', deltaY),
   hideOverlay: () => ipcRenderer.invoke('overlay:hide'),
   showOverlay: () => ipcRenderer.invoke('overlay:show'),

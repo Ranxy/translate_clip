@@ -25,6 +25,12 @@ export interface PlatformCapabilities {
   globalShortcut: GlobalShortcutSupport
   /** True when Electron's safeStorage can actually encrypt (a system keyring is present). */
   keyring: boolean
+  /**
+   * False where Electron's `setOpacity` is a no-op (Linux), so the overlay keeps the
+   * translucency its own styles give it. The settings page disables the slider and says so
+   * rather than letting the user drag a control that cannot do anything.
+   */
+  overlayOpacity: boolean
   /** False in a development run, where registering a startup entry would be meaningless. */
   launchAtLogin: boolean
 }
@@ -388,7 +394,13 @@ export interface TranslateClipApi {
 
   setOverlayCollapsed: (collapsed: boolean) => Promise<void>
   setOverlayClickThrough: (clickThrough: boolean) => Promise<void>
-  setOverlayOpacity: (opacity: number) => Promise<void>
+  /**
+   * Applies an opacity to the overlay window without touching the config.
+   *
+   * The saved value is written through `updateConfig` when the drag ends; this exists so the
+   * overlay can follow the slider instead of jumping once the round-trip completes.
+   */
+  previewOverlayOpacity: (opacity: number) => Promise<void>
   resizeOverlayBy: (deltaY: number) => Promise<void>
   hideOverlay: () => Promise<void>
   showOverlay: () => Promise<void>

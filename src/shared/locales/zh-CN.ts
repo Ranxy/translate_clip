@@ -121,6 +121,7 @@ export const zhCN = {
       overlaySection: '浮层',
       overlayOpacity: '浮层透明度',
       overlayOpacityHint: '越低越不挡视线，但阅读译文会更费力。',
+      overlayOpacityUnsupported: 'Linux 上不生效：Electron 无法在该平台设置窗口透明度，浮层保持内置的半透明外观。',
       overlayOpaque: '使用不透明背景',
       overlayOpaqueHint: '玻璃透明效果在个别显卡驱动下会显示异常，此时打开此项。',
       overlayFontSize: '浮层字号',

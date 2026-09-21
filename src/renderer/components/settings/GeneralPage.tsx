@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { APP_LIMITS } from '@shared/constants'
@@ -9,7 +10,71 @@ import { Card, CardHeader, Divider } from '../ui/Card'
 import { Field } from '../ui/Field'
 import { Select } from '../ui/Input'
 import { NumberInput } from '../ui/NumberInput'
+import { Slider } from '../ui/Slider'
 import { Switch } from '../ui/Switch'
+
+/**
+ * Overlay opacity: dragged, previewed live on the real overlay window, saved on release.
+ *
+ * The value being dragged is held here rather than read from the config, because the config is
+ * only written when the drag ends — going through the settings round-trip on every intermediate
+ * step would rewrite config.json dozens of times per drag, and the thumb would jump back to the
+ * stored value between the moves.
+ */
+function OverlayOpacityField() {
+  const { t, i18n } = useTranslation()
+  const store = useAppStore()
+  const { config, capabilities } = useAppState().bootstrap
+  const committed = config.overlay.opacity
+  const [dragged, setDragged] = useState<number | null>(null)
+
+  const opacity = dragged ?? committed
+
+  // Drops the draft once the stored value catches up with it, so what the control shows in the
+  // end is what was actually saved — including a value the main process clamped.
+  useEffect(() => {
+    if (dragged !== null && dragged === committed) {
+      setDragged(null)
+    }
+  }, [committed, dragged])
+
+  const percent = new Intl.NumberFormat(i18n.resolvedLanguage, { style: 'percent', maximumFractionDigits: 0 })
+
+  return (
+    <Field
+      label={t('settings.general.overlayOpacity')}
+      hint={
+        capabilities.overlayOpacity
+          ? t('settings.general.overlayOpacityHint')
+          : t('settings.general.overlayOpacityUnsupported')
+      }
+    >
+      <span className="w-10 text-right text-[12px] tabular-nums text-muted">{percent.format(opacity)}</span>
+      <Slider
+        data-overlay-opacity
+        className="w-32"
+        aria-label={t('settings.general.overlayOpacity')}
+        disabled={!capabilities.overlayOpacity}
+        value={opacity}
+        min={APP_LIMITS.overlayOpacity.min}
+        max={APP_LIMITS.overlayOpacity.max}
+        step={APP_LIMITS.overlayOpacity.step}
+        onPreview={(value) => {
+          setDragged(value)
+          void window.translateClip.previewOverlayOpacity(value)
+        }}
+        onCommit={(value) => {
+          if (value === committed) {
+            setDragged(null)
+            return
+          }
+
+          void store.updateConfig({ overlay: { ...config.overlay, opacity: value } })
+        }}
+      />
+    </Field>
+  )
+}
 
 export function GeneralPage() {
   const { t } = useTranslation()
@@ -50,15 +115,7 @@ export function GeneralPage() {
       <Card data-settings-section="overlay">
         <CardHeader title={t('settings.general.overlaySection')} />
 
-        <Field label={t('settings.general.overlayOpacity')} hint={t('settings.general.overlayOpacityHint')}>
-          <NumberInput
-            value={config.overlay.opacity}
-            min={APP_LIMITS.overlayOpacity.min}
-            max={APP_LIMITS.overlayOpacity.max}
-            step={APP_LIMITS.overlayOpacity.step}
-            onCommit={(value) => void store.updateConfig({ overlay: { ...config.overlay, opacity: value } })}
-          />
-        </Field>
+        <OverlayOpacityField />
 
         <Divider />
 
