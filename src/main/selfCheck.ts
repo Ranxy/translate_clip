@@ -317,6 +317,138 @@ async function checkOverlayScaling(window: BrowserWindow, log: Logger): Promise<
 }
 
 /**
+ * Proves the overlay stops advertising itself as clickable while click-through is on.
+ *
+ * Click-through hands clicks to the window underneath and forwards only mouse-*move* messages to the
+ * renderer, so a control keeps its hover highlight while the click can never arrive — the button
+ * brightens under the cursor and then does nothing, which is how "several buttons have a click
+ * animation but clicking has no effect" gets reported. The mode is honest when the whole overlay
+ * ignores pointer events, and the expanded card has to keep saying where the switch is.
+ *
+ * Measured on the window's own root, which is where the switch lives, plus the shell and one of its
+ * buttons — a `pointer-events: auto` added back inside either shell would otherwise go unnoticed, and
+ * the roots of the two shells are separate render paths. The switch being conditional matters just as
+ * much in the other direction: a permanent `pointer-events: none` would leave a dead overlay.
+ */
+async function checkClickThroughOverlay(window: BrowserWindow, log: Logger): Promise<SelfCheckEntry> {
+  const name = 'click-through overlay'
+  let original: Record<string, unknown> | null = null
+
+  try {
+    original = (await window.webContents.executeJavaScript(
+      '(async () => (await window.translateClip.getBootstrapData()).config.overlay)()'
+    )) as Record<string, unknown>
+
+    const measure = async (collapsed: boolean, clickThrough: boolean) => {
+      await window.webContents.executeJavaScript(
+        `window.translateClip.updateConfig({ overlay: ${JSON.stringify({ ...original, collapsed, clickThrough })} })`
+      )
+      await new Promise((resolve) => setTimeout(resolve, 300))
+
+      return (await window.webContents.executeJavaScript(`(() => {
+        const root = document.querySelector('[data-overlay-window]')
+        const card = document.querySelector('[data-overlay-card]')
+        const bar = document.querySelector('[data-collapsed-bar]')
+        const shell = card ?? bar
+        const button = shell ? shell.querySelector('button') : null
+        const warning = document.querySelector('[data-overlay-warning]')
+
+        return {
+          shell: card ? 'card' : bar ? 'bar' : 'missing',
+          rootPointerEvents: root ? getComputedStyle(root).pointerEvents : 'missing',
+          shellPointerEvents: shell ? getComputedStyle(shell).pointerEvents : 'missing',
+          buttonPointerEvents: button ? getComputedStyle(button).pointerEvents : 'missing',
+          warning: warning ? (warning.textContent ?? '') : ''
+        }
+      })()`)) as {
+        shell: string
+        rootPointerEvents: string
+        shellPointerEvents: string
+        buttonPointerEvents: string
+        warning: string
+      }
+    }
+
+    const expanded = await measure(false, true)
+    const collapsed = await measure(true, true)
+
+    // The error toast is a sibling of the shell, so the window root is what has to cover it. Raised
+    // for real (a rejected promise is what the host listens for) and dismissed again, because the
+    // error-surface probe that follows looks for a toast of its own.
+    const toastPointerEvents = (await window.webContents.executeJavaScript(`(async () => {
+      Promise.reject(new Error('self-check click-through probe'))
+
+      const deadline = Date.now() + 3000
+      while (Date.now() < deadline) {
+        const toast = document.querySelector('[data-error-toast]')
+        if (toast) {
+          const dismiss = toast.querySelector('button')
+          if (dismiss) dismiss.click()
+          return getComputedStyle(toast).pointerEvents
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+
+      return 'missing'
+    })()`)) as string
+
+    // Turning it back off doubles as the assertion that the suppression is conditional: a permanent
+    // `pointer-events: none` would leave a live overlay dead, and `warning` here is the baseline the
+    // click-through text is compared against — the strip also carries unrelated warnings (a missing
+    // tray, for instance), so "it is on screen" would prove nothing on its own.
+    const live = await measure(false, false)
+
+    const inert = (measured: typeof expanded) =>
+      measured.rootPointerEvents === 'none' &&
+      measured.shellPointerEvents === 'none' &&
+      measured.buttonPointerEvents === 'none'
+
+    if (expanded.shell !== 'card' || expanded.rootPointerEvents !== 'none' || !inert(expanded)) {
+      return { name, ok: false, detail: `the expanded overlay was not inert: ${JSON.stringify(expanded)}` }
+    }
+
+    if (expanded.warning === live.warning || expanded.warning.length === 0) {
+      return {
+        name,
+        ok: false,
+        detail: `the expanded overlay did not name click-through as the reason: ${JSON.stringify(expanded.warning)}`
+      }
+    }
+
+    if (collapsed.shell !== 'bar' || !inert(collapsed)) {
+      return { name, ok: false, detail: `the collapsed bar was not inert: ${JSON.stringify(collapsed)}` }
+    }
+
+    if (toastPointerEvents !== 'none') {
+      return { name, ok: false, detail: `the error toast was not inert (${toastPointerEvents})` }
+    }
+
+    if (live.rootPointerEvents === 'none' || live.buttonPointerEvents === 'none') {
+      return { name, ok: false, detail: 'the controls stayed inert after click-through was turned off' }
+    }
+
+    return {
+      name,
+      ok: true,
+      detail: 'the overlay window, both shells, their controls and the error toast ignored pointer events while click-through was on, the card named the reason, and the controls came back when it was turned off'
+    }
+  } catch (error) {
+    return { name, ok: false, detail: (error as Error).message }
+  } finally {
+    if (original) {
+      try {
+        // Restores the values captured before the check, not whatever is current now.
+        await window.webContents.executeJavaScript(
+          `window.translateClip.updateConfig({ overlay: ${JSON.stringify(original)} })`
+        )
+      } catch (error) {
+        log.warn('self-check could not restore the overlay config', error)
+      }
+    }
+  }
+}
+
+/**
  * Proves a rejected IPC call becomes visible rather than silent.
  *
  * `history:copyTranslation` throws for an entry that has no translation, which is a
@@ -1430,6 +1562,9 @@ export async function runSelfCheck(options: SelfCheckOptions): Promise<SelfCheck
 
         const scaling = await checkOverlayScaling(window, options.log)
         push(scaling.name, scaling.ok, scaling.detail)
+
+        const clickThrough = await checkClickThroughOverlay(window, options.log)
+        push(clickThrough.name, clickThrough.ok, clickThrough.detail)
 
         const errorSurface = await checkErrorSurface(window)
         push(errorSurface.name, errorSurface.ok, errorSurface.detail)

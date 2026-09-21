@@ -181,5 +181,16 @@ export function useAppStore(): AppStore {
 
 export function useAppState(): AppStoreState {
   const store = useAppStore()
+  return useStoreSnapshot(store)
+}
+
+/**
+ * Subscribes to a store that is already in hand.
+ *
+ * `App` creates the store and therefore sits above the provider, so it cannot reach `useAppStore`;
+ * it still needs the live snapshot, because the overlay window's click-through state can be flipped
+ * from the tray while the window is running.
+ */
+export function useStoreSnapshot(store: AppStore): AppStoreState {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
 }

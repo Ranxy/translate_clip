@@ -567,7 +567,7 @@ interface AppConfig {
 - 位置:默认右下角(主显示器 `workArea` 内边距 24px),之后由 `windowStateStore` 记忆;恢复时用 `isVisibleOnAnyDisplay()` 夹回可见区域(处理显示器拔插)。
 - 几何持久化:沿用 eve-babel 的 `move`/`resize` 180ms debounce 落盘。
 - 高度:**默认固定**,内容内部滚动;渲染进程可经 `overlay:resizeBy(deltaY)` 请求微调(历史面板展开等场景复用 eve-babel 的 `resizeOverlayBody`)。
-- **鼠标穿透**:`setIgnoreMouseEvents(true, { forward: true })`;开启后浮层不可交互,必须能从托盘/快捷键关掉 —— 因此穿透状态下快捷键显隐仍然有效,并且启用时用系统通知提示一次(避免"点不到又不知道怎么关")。
+- **鼠标穿透**:`setIgnoreMouseEvents(true, { forward: true })`;开启后浮层不可交互,必须能从托盘/快捷键关掉 —— 因此穿透状态下快捷键显隐仍然有效,并且启用时用系统通知提示一次(避免"点不到又不知道怎么关")。渲染进程这边在穿透期间把**整个浮层窗口**的 `pointer-events` 关掉 —— 这个开关在 `App.tsx`(按 `view === 'overlay'` 限定,设置/引导窗口同包但从不穿透),而不是放在 shell 里:错误提示 toast 是 shell 的兄弟节点,放在 shell 里就漏了它,放在窗口根上也自动覆盖浮层以后新增的东西。OS 只把 **mousemove** 转发进来,控件照样会在光标下高亮、却永远点不动,这种"假可点"反馈比没有反馈更糟 —— 自检的 `click-through overlay` 探针就是量这件事(窗口根、两种 shell、shell 里的按钮、toast 都必须 inert;展开态必须说明原因;关掉穿透后必须恢复可交互)。
 - **透明度**:`setOpacity(config.overlay.opacity)`,范围 0.6–1(与 `sanitizeConfig` 同一处夹取)。设置页的滑块拖动期间走 `overlay:previewOpacity` 即时改窗口、**不落盘**,松手才 `app:updateConfig` 写一次 —— 拖一次只写一次配置,滑块也不会被存储值拽回原位。**Linux 上 Electron 的 `setOpacity` 是空实现**(`@platform win32,darwin`),所以 `capabilities.overlayOpacity` 为 false,设置页把滑块置灰并说明原因,而不是留一个拖了没反应的控件。
 - 设置窗口:普通窗口(`frame: true`,720×760),`parent` 不设为浮层(浮层 `skipTaskbar` 且置顶,设为 parent 会有奇怪的 z-order 关系),模态性用 `show()` + `focus()` + 单实例复用实现。
 - **引导窗口(onboarding)**:`?view=onboarding`,640×560、`resizable: false`、居中、`alwaysOnTop: false`、`skipTaskbar: false`、无边框(自带标题栏与关闭按钮)。首启自动打开;关闭窗口等价于"稍后再说"(`onboardingCompleted` 置 true,但 Provider 未配置 → 浮层进入 `unconfigured` 引导态)。可从设置页「通用 → 重新运行初始向导」再次打开。
@@ -841,7 +841,7 @@ linux:
 | 集成(mock fetch) | `llmClient` + 队列 + 仓储 | 401/429/500/超时/中断路径 → 状态与历史落库正确 |
 | 手工(Windows 本机,dev) | `npm run dev` | 浮层视觉/交互/折叠(按内容自适应)/穿透/暂停/清空/自动替换、**首启引导四步(含用全新 userData 复现首启)**、设置页各表单、dev 注入剪贴板的端到端链路、真实剪贴板监听(前台/后台/多应用)、置顶层级、托盘、快捷键、重启后配置与窗口位置恢复 |
 | 手工(Windows 安装版) | `npm run dist:win` | NSIS 安装/卸载、开机自启、托盘图标、单实例 |
-| 静态 + 冒烟 | `npm run typecheck`、`npm run self-check` | 全量类型(干净);自检 `[self-check] PASSED`、`"ok": true` 共 31 条(资源 / asar 布局 / sql.js wasm / 剪贴板管线 / 真实翻译 / 全部设置页 / 浮层透明度滑块 / 向导) |
+| 静态 + 冒烟 | `npm run typecheck`、`npm run self-check` | 全量类型(干净);自检 `[self-check] PASSED`、`"ok": true` 共 32 条(资源 / asar 布局 / sql.js wasm / 剪贴板管线 / 真实翻译 / 全部设置页 / 浮层透明度滑块 / 鼠标穿透 / 向导) |
 | Linux(CI) | `ubuntu-latest` workflow | `typecheck + test`、AppImage / deb 出包;Linux 桌面的真实行为(托盘宿主、Wayland 快捷键)按 §12 的产品限制处理 |
 
 ### 10.4 一期验收标准
