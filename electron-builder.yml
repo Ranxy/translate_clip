@@ -17,9 +17,9 @@ asarUnpack:
   - "**/node_modules/sql.js/dist/*.wasm"
 artifactName: ${productName}-${version}-${arch}.${ext}
 # Publishing only ever happens through .github/workflows (on a published GitHub
-# Release), which calls `npm run release:win` / `release:linux` — i.e. `--publish
-# always`. Every other build passes `--publish never`, so this block stays inert
-# locally and in PR/main builds. It exists to pin two defaults:
+# Release), which calls `npm run release:win` — i.e. `--publish always`. Every
+# other build passes `--publish never`, so this block stays inert locally and in
+# PR/main builds. It exists to pin two defaults:
 #   - releaseType: release — electron-builder defaults to *draft*, and a draft
 #     publisher refuses to upload to a release that is already public ("GitHub
 #     release not created"), which is exactly the release we are building for.
@@ -35,9 +35,9 @@ win:
       arch:
         - x64
   # electron-builder converts this PNG to a multi-size ICO on the Windows side
-  # (getOrConvertIcon('ico') accepts .png). Shipping our own hand-rolled .ico was
-  # worse: ICO cannot be decoded by nativeImage on Linux, so the file could not be
-  # verified anywhere except on Windows.
+  # (getOrConvertIcon('ico') accepts .png). A hand-rolled .ico was tried and
+  # dropped: it duplicated an asset the app already loads as PNG, and the
+  # self-check's icon probes only cover the PNGs.
   icon: resources/icons/icon.png
 nsis:
   oneClick: false
@@ -45,10 +45,3 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   shortcutName: TranslateClip
-linux:
-  target:
-    - AppImage
-    - deb
-  category: Utility
-  icon: resources/icons
-  maintainer: Ranxy

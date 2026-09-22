@@ -27,12 +27,14 @@
 
 ## 安装
 
-主要目标是 Windows 10/11 (x64)，同时也会构建 Linux（AppImage / deb）版本。
+只构建 Windows 10/11 (x64) 安装包。Linux 的情况见*已知限制*。
 
-1. **下载安装包**：在仓库的 *Actions* 标签页里打开最新的 `build-windows` 运行记录，下载 `TranslateClip-*-x64.exe` 构建产物，然后运行它。
+1. **下载安装包**：在仓库的 *Releases* 页面下载 `TranslateClip-<版本>-x64.exe`，然后运行它。
 2. **或者自己构建**——参见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
 安装程序可以自选目录，也不需要管理员权限。新版本会覆盖安装旧版本，你的设置和历史都会保留。
+
+> Release 由本仓库的 CI 从对应 tag 构建。安装包**没有代码签名**，所以首次运行会出现 SmartScreen 的「Windows 已保护你的电脑」——点*更多信息* → *仍要运行* 即可。要去掉这个提示需要付费的代码签名证书。
 
 ## 首次运行
 
@@ -96,12 +98,12 @@ API Key 用操作系统自带的能力加密（Windows 上是 DPAPI），并且�
 
 ## 数据存放位置
 
-| Windows | Linux | 内容 |
-| --- | --- | --- |
-| `%APPDATA%\translate-clip\config.json` | `~/.config/translate-clip/config.json` | 所有设置和术语表 |
-| `…\data.sqlite` | `…/data.sqlite` | 翻译服务配置和翻译历史 |
-| `…\window-state.json` | `…/window-state.json` | 窗口位置和大小 |
-| `…\logs\main.log` | `…/logs/main.log` | 应用日志，超过 2 MB 时轮转 |
+| 路径 | 内容 |
+| --- | --- |
+| `%APPDATA%\translate-clip\config.json` | 所有设置和术语表 |
+| `…\data.sqlite` | 翻译服务配置和翻译历史 |
+| `…\window-state.json` | 窗口位置和大小 |
+| `…\logs\main.log` | 应用日志，超过 2 MB 时轮转 |
 
 *设置 → 关于*会显示确切路径，并可以打开该目录。删除整个目录会把应用重置回首次运行的状态，向导也会重新出现。
 
@@ -110,7 +112,7 @@ API Key 用操作系统自带的能力加密（Windows 上是 DPAPI），并且�
 - **独占全屏运行的游戏会遮住浮层。** 这是 Windows/DWM 的规则，而不是应用能绕开的问题；请把游戏改成无边框窗口模式。
 - **透明是有代价的。** 透明的置顶窗口没有投影，而且在某些显卡驱动上毛玻璃效果会很慢——**设置 → 通用 → 使用不透明背景**可以用纯色换掉模糊。
 - **鼠标穿透会让浮层点不动。** 这本来就是它的用途；从托盘菜单关掉即可，你开启的那一刻浮层也会提示这一点。
-- **在 Linux 上**，Wayland 会话只允许获得焦点的客户端读取剪贴板，全局快捷键只能作用于 X11 应用，托盘还需要 StatusNotifier 宿主；此外窗口透明度在该平台不可用，浮层的透明度滑块会被置灰。Windows 才是主要目标平台。
+- **没有 Linux 构建。** 源码里保留了 Linux 分支——托盘降级、X11 快捷键、密钥环探测、窗口透明度能力上报——但不出包，这些分支也没有被测过，不提供支持。
 
 ## 文档
 

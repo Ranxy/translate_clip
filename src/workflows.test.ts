@@ -27,9 +27,8 @@ function readWorkflow(name: string): string {
  * is to catch exactly that class of drift.
  */
 describe('CI workflows', () => {
-  it('has at least a Windows and a Linux workflow', () => {
+  it('has the Windows workflow', () => {
     expect(workflowFiles).toContain('build-windows.yml')
-    expect(workflowFiles).toContain('build-linux.yml')
   })
 
   it('can be started by hand from the Actions tab', () => {
@@ -50,15 +49,10 @@ describe('CI workflows', () => {
     }
   })
 
-  it('uploads the artifact each platform is supposed to produce', () => {
+  it('uploads the artifact the Windows workflow is supposed to produce', () => {
     const windows = readWorkflow('build-windows.yml')
     expect(windows).toContain('npm run dist:win')
     expect(windows).toContain('dist/*.exe')
-
-    const linux = readWorkflow('build-linux.yml')
-    expect(linux).toContain('npm run dist:linux')
-    expect(linux).toContain('dist/*.AppImage')
-    expect(linux).toContain('dist/*.deb')
   })
 
   it('installs from the lockfile', () => {

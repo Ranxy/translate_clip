@@ -4,8 +4,8 @@
 
 开发与验证都在本机 **Windows 11 + PowerShell 7** 上进行。已经验证过:构建、`npm run typecheck`(干净)、
 **162 个单元测试**、以及 `--self-check`(**28 条**,末行 `[self-check] PASSED`;覆盖资源、asar 布局、
-sql.js wasm、剪贴板管线、真实翻译、全部设置页、向导)。Linux 仍是交付目标(AppImage / deb,Linux CI 出包),
-但 Linux 桌面的平台差异不在本清单范围内(见 `DESIGN.md` §12 的产品限制)。
+sql.js wasm、剪贴板管线、真实翻译、全部设置页、向导)。只出 Windows 包:Linux 出包链路(AppImage / deb +
+Linux CI)已移除,代码里的 Linux 兼容分支保留但不在本清单范围内(见 `DESIGN.md` §12)。
 
 每一条都给了**预期结果** —— 不一致就是 bug,请按最后一节提供信息。
 
@@ -16,7 +16,7 @@ sql.js wasm、剪贴板管线、真实翻译、全部设置页、向导)。Linux
 | 方式 | 命令 / 操作 | 用途 |
 | --- | --- | --- |
 | 开发运行 | `npm install` → `npm run dev` | 快速迭代;此时**开机自启不可用**(UI 会置灰说明) |
-| 安装包 | `npm run dist:win` 或 Actions 页下载 | 验证真实安装体验、自启、托盘图标 |
+| 安装包 | `npm run dist:win`,或从 Releases 页下载 | 验证真实安装体验、自启、托盘图标 |
 
 自动化检查(三条都跑一次,预期都已在本机确认):
 

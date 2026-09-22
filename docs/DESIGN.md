@@ -1,9 +1,9 @@
 # TranslateClip 设计方案
 
 > 剪贴板监听 → LLM 翻译 → 常驻置顶浮层
-> 第一期交付平台:**Windows + Linux**;架构预留 macOS(第三期)
+> 第一期交付平台:**Windows**;架构预留 macOS(第三期)
 > 开发环境:Windows 11 + PowerShell 7(2560×1440 @150% 缩放,Electron 视口 1707×960 DIP);
-> Linux 是交付目标而不是开发环境,由 Linux CI 出包验证
+> 原定同时交付 Linux(AppImage / deb,Linux CI 出包),**出包链路已移除**,见 §9
 
 ---
 
@@ -12,11 +12,11 @@
 **本文档写在实现之前,部分内容已经与代码不一致。** 权威来源是代码与
 [`README.md`](../README.md);本文件保留的是设计推理与取舍,用来回答"为什么这样做"。
 
-**已实现(Windows + Linux)**:配置层、浮层 / 设置窗口 / 首启向导(4 步)、托盘、全局快捷键、
+**已实现(Windows)**:配置层、浮层 / 设置窗口 / 首启向导(4 步)、托盘、全局快捷键、
 开机自启、剪贴板管线(轮询 + 过滤链 + 语言脚本检测 + 方向决策)、provider profile(sql.js)
 与 safeStorage 凭据、OpenAI 兼容客户端(重试 / 超时 / 取消 / 三层响应解析)、latest-wins 队列、
 历史与复用缓存、术语表注入、提示词与参数编辑、历史面板、术语表编辑器、快捷键录制、
-失败通知、NSIS / AppImage / deb 打包与 CI。
+失败通知、NSIS 打包与 CI、发 Release 时自动出包并挂资产。
 
 **与本文档的偏离(以代码为准)**:
 
@@ -29,11 +29,12 @@
 | 失败通知 | 只在配置里列了 `notificationsEnabled` | `failureNotification.ts`(纯决策 + 静默窗口)+ `desktopNotifier.ts`(Electron 薄封装) |
 | 平台能力 | 未提及 | `capabilityRegistry` 上报 `tray` / `globalShortcut` / `keyring` / `launchAtLogin`(开发模式下自启不可用会置灰) |
 | 打包细节 | 一份 `extraResources: resources → resources` | 逐目录映射,否则打包后在 `<resources>/resources/...` 而代码找 `<resources>/icons/...`(托盘图标会空白) |
-| 图标 | 计划产出 PNG + 手写 ICO | **只有 PNG**:ICO 在 Linux 上无法用 `nativeImage` 校验,而 `win.icon` 指向的 PNG 会由 electron-builder 转换为 ICO |
+| 图标 | 计划产出 PNG + 手写 ICO | **只有 PNG**:自检的图标探针只解码 PNG,手写 ICO 会是一份没人复核的副本;而 `win.icon` 指向的 PNG 会由 electron-builder 转换为 ICO |
 | 折叠态几何 | 固定 76 DIP 的单行条 | 折叠条**按内容自适应高度**:默认一行,预览换行时最多 6 行,折叠态不套用窗口最小高度;预览一旦折行,右侧控件(暂停 / 清空 / 展开)由横排改为竖排,把宽度让给文字 |
 | 自动替换剪贴板 | 未提及 | `autoReplaceClipboard`(默认**关**):每段完成的译文自动写回剪贴板,替换用户复制的内容;浮层状态条图标与 设置 → 剪贴板 是**同一个开关**,任一侧切换即时同步,自写抑制保证不会把译文再翻一遍 |
 | 清空当前 | 未提及 | 浮层动作区的「清空」一次性清空原文 + 译文并回到空态,同时取消在途请求;无内容时置灰 |
 | 监听开关 | 只有托盘「暂停监听」 | 浮层三处可切:头部「监听中 / 已暂停」徽标、状态条右侧的「暂停 / 恢复」动作、折叠条上的图标(折叠态的唯一入口) |
+| Linux 出包 | 一期交付 Windows + Linux(AppImage / deb,`build-linux.yml` 出包并跑 `typecheck + test`) | **出包链路已移除**:`dist:linux` / `release:linux`、`.github/workflows/build-linux.yml`、`electron-builder.yml` 的 `linux:` 段都不在了。代码里的 Linux 运行时分支持(托盘降级、X11 快捷键、无密钥环告警、`setOpacity` 能力上报)保留,但不再构建、不承诺支持 |
 
 **未实现**:`streamEnabled`(配置项保留但未接)、macOS 适配、Wayland 原生剪贴板、
 OCR / 划词取词。Windows 侧的人工验证清单见 [`WINDOWS-VERIFICATION.md`](WINDOWS-VERIFICATION.md)。
@@ -72,12 +73,12 @@ OCR / 划词取词。Windows 侧的人工验证清单见 [`WINDOWS-VERIFICATION.
 
 | # | 需求 | 确认结果 |
 | --- | --- | --- |
-| 1 | 多平台 | 一期 Windows + Linux;macOS 架构预留 |
+| 1 | 多平台 | 一期 Windows ~~+ Linux~~(Linux 出包已移除,见 §0);macOS 架构预留 |
 | 2 | 核心功能 | 监听剪贴板并翻译 |
 | 3 | 浮层 | 屏上最上层浮层 |
 | 4 | 观感 | 美观、现代、样式尽量精简 |
 | 5 | 翻译 | LLM 翻译,provider 可配置(参考 eve-babel) |
-| 6 | 一期平台 | Windows + Linux |
+| 6 | 一期平台 | Windows(Linux 出包已移除,见 §0) |
 
 ### 1.2 你补充确认的决策
 
@@ -93,7 +94,7 @@ OCR / 划词取词。Windows 侧的人工验证清单见 [`WINDOWS-VERIFICATION.
 - **首次运行**:弹出引导向导,让用户配置翻译方向(必做)、Provider(可跳过)、系统集成项。
 - **历史上限 / 缓存**:500 条 / 24h。
 - **CI**:附加 GitHub Actions workflow,在 `windows-latest` 出 Windows 包(本地 `dist:win` 同样保留)。
-- **构建**:开发与验证都在本机 Windows 上进行(`npm run dev` / `npm run dist:win`);Linux 是交付目标,由 Linux CI 出 AppImage / deb(因此不以 wine 交叉构建为前提)。
+- **构建**:开发与验证都在本机 Windows 上进行(`npm run dev` / `npm run dist:win`);Linux 曾作为交付目标由 Linux CI 出 AppImage / deb,该链路已移除(见 §9),因此也不需要 wine 交叉构建。
 
 ### 1.3 非目标(一期不做)
 
@@ -301,7 +302,7 @@ class ClipboardWatcher {
 
 - 轮询间隔由配置控制(200–2000ms,默认 400ms)。间隔越短延迟越低、越耗电;文档给出默认即够用。
 - 图片/文件/HTML 一律**忽略**(只 `readText()`),不做富文本处理。
-- **Wayland 原生(Linux 产品侧)**:部分合成器只允许聚焦的客户端读剪贴板 → 浮层失焦时可能读不到。Linux 一期以 X11/XWayland 为准,文档明示;二期再评估 `wl-paste` 辅助进程。Windows 走主进程 `readText()`,无此限制。
+- **Wayland 原生(Linux 产品侧)**:部分合成器只允许聚焦的客户端读剪贴板 → 浮层失焦时可能读不到。原计划 Linux 一期以 X11/XWayland 为准、二期再评估 `wl-paste` 辅助进程;Linux 出包已移除(见 §9),`wl-paste` 不做。Windows 走主进程 `readText()`,无此限制。
 - **Linux 空选择**:X11 下剪贴板所有者退出后 `readText()` 可能返回空 → 空串直接跳过,不清空 `lastSig`。
 - 应用自身退出/暂停时不写回,不影响系统剪贴板。
 
@@ -763,7 +764,7 @@ debug:writeClipboard(text)
 
 ## 9. 构建与打包
 
-**`electron-builder.yml`(一期 win + linux)**
+**`electron-builder.yml`(只出 Windows)**
 
 ```yaml
 appId: com.ranxy.translateclip
@@ -781,10 +782,6 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
-linux:
-  target: [ AppImage, deb ]
-  category: Utility
-  icon: resources/icons
 ```
 
 **脚本**
@@ -797,13 +794,12 @@ linux:
 "test": "vitest run",
 "test:watch": "vitest",
 "pack": "npm run build && electron-builder --dir",
-"dist:win": "npm run build && electron-builder --win nsis",
-"dist:linux": "npm run build && electron-builder --linux AppImage deb"
+"dist:win": "npm run build && electron-builder --win nsis"
 ```
 
-- Windows 包在本机 `npm run dist:win` 产出;Linux 包由 Linux CI 产出(AppImage / deb),不做 wine 交叉构建 —— 同时按你确认的意见附带 Windows CI 出包。
-- **`.github/workflows/build-windows.yml`(已确认要做)** —— 复刻 eve-babel 模板:`windows-latest` + `npm ci` + `node node_modules/electron/install.js`(确保 Electron 二进制)+ `typecheck` + `test` + `npm run dist:win` + `upload-artifact`。触发条件:`workflow_dispatch` / push `main` / push tag `v*` / PR 到 `main`。
-- 另加 `.github/workflows/build-linux.yml`(ubuntu-latest,`dist:linux`,顺手在 CI 上验证 Linux 侧 `typecheck + test` —— 这两步的 **Linux 验证只在 CI 上跑**,本机 Windows 跑的是同一套 `typecheck` / `test`)。
+- Windows 包在本机 `npm run dist:win` 产出;Linux 出包已移除,不必再考虑 wine 交叉构建。
+- **`.github/workflows/build-windows.yml`(已确认要做)** —— 复刻 eve-babel 模板:`windows-latest` + `npm ci` + `node node_modules/electron/install.js`(确保 Electron 二进制)+ `typecheck` + `test` + `npm run dist:win` + `upload-artifact`。触发条件:`workflow_dispatch` / push `main` / PR 到 `main` / **`release: published`**(发布 Release 时以 `npm run release:win --publish always` 出包并挂资产,先跑 `scripts/check-release-tag.mjs` 校验 tag)。
+- `.github/workflows/build-linux.yml`(ubuntu-latest,`dist:linux`)随 Linux 出包链路一并删除。
 - `.gitignore`:`node_modules`、`out`、`dist`、`*.log`、`docs/spec`(如后续加 spec)。
 
 ---
@@ -820,8 +816,8 @@ linux:
 | 平台能力 | ✅ `tray: true`、`globalShortcut: "full"`、`keyring: true`(Windows 走 DPAPI) |
 | 开机自启 | 开发运行下不可用 —— **设计如此**,只有安装版才写系统启动项(见 §5.10) |
 | GPU 兜底 | `npm run dev:gpu-off`(跨平台脚本,置 `TRANSLATE_CLIP_DISABLE_GPU=1` → `disable-gpu`) |
-| Linux | 仍是交付目标(AppImage + deb,Linux CI 出包并跑 `typecheck + test`),只是不再是开发环境 |
-| 打包 | Windows 包本机 `npm run dist:win` 产出;不做 wine 交叉构建 |
+| Linux | 出包链路已移除(见 §9);运行时的兼容分支保留在代码里,但没有 CI,不作为交付或验证目标 |
+| 打包 | Windows 包本机 `npm run dist:win` 产出 |
 
 ### 10.2 在本机上怎么跑、怎么验
 
@@ -842,7 +838,7 @@ linux:
 | 手工(Windows 本机,dev) | `npm run dev` | 浮层视觉/交互/折叠(按内容自适应)/穿透/暂停/清空/自动替换、**首启引导四步(含用全新 userData 复现首启)**、设置页各表单、dev 注入剪贴板的端到端链路、真实剪贴板监听(前台/后台/多应用)、置顶层级、托盘、快捷键、重启后配置与窗口位置恢复 |
 | 手工(Windows 安装版) | `npm run dist:win` | NSIS 安装/卸载、开机自启、托盘图标、单实例 |
 | 静态 + 冒烟 | `npm run typecheck`、`npm run self-check` | 全量类型(干净);自检 `[self-check] PASSED`、`"ok": true` 共 32 条(资源 / asar 布局 / sql.js wasm / 剪贴板管线 / 真实翻译 / 全部设置页 / 浮层透明度滑块 / 鼠标穿透 / 向导) |
-| Linux(CI) | `ubuntu-latest` workflow | `typecheck + test`、AppImage / deb 出包;Linux 桌面的真实行为(托盘宿主、Wayland 快捷键)按 §12 的产品限制处理 |
+| ~~Linux(CI)~~ | 已移除 | `build-linux.yml` 删除后,非 Windows 平台的 `typecheck + test` 与 xvfb `self-check` 硬门禁一并消失;Windows 上的 `self-check` 仍是 `continue-on-error` 的额外信号 |
 
 ### 10.4 一期验收标准
 
@@ -855,7 +851,7 @@ linux:
 7. 重启应用后:配置、Provider、历史、浮层位置全部恢复。
 8. 术语表命中时,强制译法生效,且注入条目数不超过上限。
 9. 中→英、英→中双向在 `auto` 模式下自动正确;`fixed` 模式严格单向。
-10. `npm run typecheck` 与 `npm run test` 全绿(本机 Windows);Linux 侧由 CI 跑同样两步并产出可运行的 AppImage / deb。
+10. `npm run typecheck` 与 `npm run test` 全绿(本机 Windows)。
 11. Windows 安装与系统集成:NSIS 安装/卸载、开机自启、托盘、全局快捷键、单实例均正常(平台能力以 `app:getPlatformCapabilities` 的 `tray: true` / `globalShortcut: "full"` / `keyring: true` 为准)。
 12. **首启引导**:全新 `userData` 下首次启动先弹引导;第 1 步不选方向无法继续;第 2 步可跳过;"完成"后 `onboardingCompleted=true` 且重启不再弹;直接关窗等价跳过并让浮层显示 `unconfigured` 引导卡;设置页可重新运行向导。
 13. **无快捷键也能全流程可用**:默认配置下,靠"复制自动翻译 + 浮层按钮 + 托盘菜单"能完成翻译、查看历史、复制译文、暂停监听,不依赖任何全局加速键。
@@ -869,7 +865,7 @@ linux:
 | **P0 骨架** | 仓库脚手架 + `git init`、electron-vite + React + Tailwind v4 token、单实例、`configStore`(含 `onboardingCompleted`)、`windowManager`(浮层空壳 + 设置空壳)、单入口多视图、i18n 骨架、主题跟随、托盘降级、`app:getPlatformCapabilities` | 本机 `npm run dev` 能看到浮层与设置窗,`typecheck` 通过 |
 | **P1 核心闭环 + 首启引导** | `clipboardWatcher` + `clipboardFilter` + `languageDetector` + `promptBuilder` + `llmClient` + `translationQueue` + `llmProviderCatalog/ConfigStore`(4 + Ollama)+ `historyRepository` + 浮层"当前/历史" + copy-back + 错误态 + dev 注入;**引导向导第 1、2 步(方向必填 + Provider 可跳过)** | 验收标准 1–7、12 达成 |
 | **P2 完整度** | Providers 设置页(模型拉取/测试连接)、提示词页 + 预览、术语表 CRUD + 导入导出、快捷键录制(默认空)、开机自启、缓存策略细化、调试日志、鼠标穿透、折叠态、忽略正则、i18n 补全;**引导向导第 3、4 步 + 重新运行向导入口** | 验收标准 8–9 达成 |
-| **P3 打包与跨平台** | electron-builder win/linux、图标资源、两个 CI workflow、README、macOS 适配设计(dock 隐藏、vibrancy、`LSUIElement`)、Wayland 原生剪贴板评估 | Linux 包由 CI 出包;Windows 包本机 `dist:win` 产出并验证 |
+| **P3 打包与跨平台** | electron-builder(win;~~linux~~)、图标资源、CI workflow、Release 自动发版、README、macOS 适配设计(dock 隐藏、vibrancy、`LSUIElement`)、~~Wayland 原生剪贴板评估~~ | Windows 包本机 `dist:win` 产出并验证;发 GitHub Release 时由 CI 出包并挂到该 Release |
 
 每个阶段结束我都会跑 `npm run typecheck` + `npm run test`,并在本机 Windows 上实际启动确认,再交给你确认。
 
@@ -877,8 +873,10 @@ linux:
 
 ## 12. 已知风险与平台限制(提前说清,不做事后解释)
 
+> 第 2–4 条描述的是代码里保留的 Linux 兼容分支;Linux 出包链路已移除(见 §9),它们不是交付风险。
+
 1. **独占全屏游戏无法覆盖**:DirectX 独占全屏绕过 DWM,任何置顶窗口都盖不住。需目标应用使用"无边框窗口"模式。浮层文档与设置页都会写明。
-2. **Wayland 原生剪贴板读取受限(Linux 产品侧)**:部分合成器要求客户端聚焦才能读剪贴板 → Linux 一期以 X11/XWayland 为准;原生 Wayland 支持列 P3。Windows 走主进程 `readText()`,无此限制。
+2. **Wayland 原生剪贴板读取受限(Linux 产品侧)**:部分合成器要求客户端聚焦才能读剪贴板 → 原计划以 X11/XWayland 为准、原生 Wayland 支持列 P3;Linux 出包已移除(见 §9),这条只剩代码分支的意义。Windows 走主进程 `readText()`,无此限制。
 3. **Linux `globalShortcut` 依赖 X11**:原生 Wayland 会话下可能注册失败,托盘/浮层按钮兜底;Windows 上实测为 `full`。
 4. **个别 Linux 桌面无托盘宿主**:托盘图标不可见,靠 `try/catch` 降级保证不阻塞启动;Windows 上托盘可用(`tray: true`)。
 5. **sql.js 每次写需导出整库**:用"debounce 1.5s + maxWait 5s + 原子写 + historyLimit 裁剪"控制成本;若历史规模被拉到数万条,再评估迁移 better-sqlite3(仓储接口已隔离,替换只影响一个文件)。
@@ -899,13 +897,13 @@ linux:
 6. `src/main/services/{windowManager,trayController,shortcutManager,autoLaunch,glossaryStore,llmDebugLogger,logStore}.ts`
 7. `src/renderer/{index.html,main.tsx,App.tsx,tailwind.css,i18n/*,store/appStore.ts}`
 8. `src/renderer/components/ui/*`(8 个基础件)→ `overlay/*` → `onboarding/*`(4 步向导)→ `settings/*`
-9. `resources/` 图标 → `.github/workflows/{build-windows,build-linux}.yml` → 由 Linux CI 出 `dist:linux` 包验证
+9. `resources/` 图标 → `.github/workflows/build-windows.yml` → 由 CI 出 Windows 包(`release: published` 时直接挂到 Release)
 
 ---
 
 ## 14. 决策已闭环
 
-你已确认(§0 / §1.2):命名 `TranslateClip` / `剪译`、appId `com.ranxy.translateclip`、**默认不注册全局快捷键**、**首启引导配置翻译方向**、历史上限 500 + 缓存 24h、附加 Windows CI 出包、开发与验证都在本机 Windows 11 上进行 / Linux 交付目标由 Linux CI 出包验证。
+你已确认(§0 / §1.2):命名 `TranslateClip` / `剪译`、appId `com.ranxy.translateclip`、**默认不注册全局快捷键**、**首启引导配置翻译方向**、历史上限 500 + 缓存 24h、附加 Windows CI 出包、开发与验证都在本机 Windows 11 上进行。~~Linux 交付目标由 Linux CI 出包验证~~ —— 该出包链路已移除(见 §9)。
 
 以下是我按上面默认值自行拍板、**不阻塞开工**的细项(实现中或验收时可随时让我改):
 

@@ -37,14 +37,18 @@ You press Ctrl+C in some app   →   ┌─────────────�
 
 ## Install
 
-Windows 10/11 (x64) is the primary target. Linux (AppImage / deb) is also built.
+Windows 10/11 (x64): the installer is the only package built. See *Known limitations* for Linux.
 
-1. **Download the installer** from the repository's *Actions* tab: open the newest `build-windows`
-   run and download the `TranslateClip-*-x64.exe` artifact, then run it.
+1. **Download the installer** from the repository's *Releases* page —
+   `TranslateClip-<version>-x64.exe` — and run it.
 2. **Or build it yourself** — see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 The installer lets you choose the folder and does not need administrator rights. Later versions
 install over the previous one; your settings and history are kept.
+
+> Releases are built by this repository's CI from the published tag. The installer is **not
+> code-signed**, so the first run shows SmartScreen's *"Windows protected your PC"* prompt: choose
+> *More info → Run anyway*. Removing that prompt needs a paid code-signing certificate.
 
 ## First run
 
@@ -137,12 +141,12 @@ platform diagnostics, and *Run the first-run wizard again*.
 
 ## Where your data lives
 
-| Windows | Linux | Contents |
-| --- | --- | --- |
-| `%APPDATA%\translate-clip\config.json` | `~/.config/translate-clip/config.json` | All settings and the glossary |
-| `…\data.sqlite` | `…/data.sqlite` | Provider profiles and translation history |
-| `…\window-state.json` | `…/window-state.json` | Window position and size |
-| `…\logs\main.log` | `…/logs/main.log` | Application log, rotated at 2 MB |
+| Path | Contents |
+| --- | --- |
+| `%APPDATA%\translate-clip\config.json` | All settings and the glossary |
+| `…\data.sqlite` | Provider profiles and translation history |
+| `…\window-state.json` | Window position and size |
+| `…\logs\main.log` | Application log, rotated at 2 MB |
 
 *Settings → About* shows the exact path and opens the folder. Deleting the whole folder resets the
 app to a first run, wizard and all.
@@ -156,10 +160,9 @@ app to a first run, wizard and all.
   trades the blur for a solid colour.
 - **Click-through makes the overlay unclickable.** That is what it is for; turn it off from the tray
   menu, and the overlay says so the moment you enable it.
-- **On Linux**, a Wayland session only lets a focused client read the clipboard, global shortcuts
-  reach X11 applications only, and the tray needs a StatusNotifier host. Window transparency is not
-  available either, so the overlay's opacity slider is disabled there. Windows is the primary
-  target.
+- **There is no Linux build.** The sources keep their Linux branches — tray fallback, X11 shortcuts,
+  keyring detection, the window-opacity capability check — but nothing is packaged there, and none of
+  it is tested or supported.
 
 ## Documentation
 

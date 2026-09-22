@@ -4,8 +4,9 @@
 [README](../README.md)**;设计取舍与"为什么这样做"在 [DESIGN.md](DESIGN.md);人工验证清单在
 [WINDOWS-VERIFICATION.md](WINDOWS-VERIFICATION.md)。
 
-开发与验证**都在 Windows 上进行**(Windows 11 + PowerShell 7)。Linux(AppImage / deb)仍是支持
-目标,由 CI 出包,但不再作为开发环境。
+开发与验证**都在 Windows 上进行**(Windows 11 + PowerShell 7)。**只出 Windows 安装包**:Linux
+曾计划随一期交付(AppImage / deb + Linux CI),该出包链路已移除(见 §6);代码里的 Linux 兼容分支
+保留,但不再构建、不承诺支持。
 
 ---
 
@@ -38,9 +39,7 @@
 | `npm run icons` | 重新生成 `resources/` 里的图标(无第三方依赖的生成脚本) |
 | `npm run pack` | `electron-builder --dir`,产出未打包目录,便于检查 asar 布局 |
 | `npm run dist:win` | Windows NSIS 安装包(只出包,不发布) |
-| `npm run dist:linux` | Linux AppImage + deb(只出包,不发布) |
 | `npm run release:win` | Windows NSIS 安装包并**发布到 GitHub Release**(只有 Release 事件下的 CI 会调用) |
-| `npm run release:linux` | Linux AppImage + deb 并发布到该 Release(同上) |
 | `node scripts/check-release-tag.mjs <tag>` | 校验 tag 是 `v<package.json version>`(CI 在出 Release 前先跑;本地可手动跑) |
 
 > **注意**:`electron-vite dev` 默认不带 `-w`,**不会**监听主进程/preload 的改动并重启。改了
@@ -98,9 +97,9 @@ src/
 
 ## 6. 打包
 
-`electron-builder.yml` 一次配置两端:Windows 为 NSIS(可选目录、无需管理员),Linux 为
-AppImage + deb。`files` 只收 `out/**` 与 `package.json`,`resources/` 通过 `extraResources` 随包
-发出。
+`electron-builder.yml` 只配置 Windows(NSIS,可选目录、无需管理员)。`files` 只收 `out/**` 与
+`package.json`,`resources/` 通过 `extraResources` 随包发出。Linux 的 `linux:` 段(AppImage / deb)
+曾经存在,现已移除——只出 Windows 包,也就不需要 wine 交叉构建。
 
 四个容易踩的点,改动时请保留:
 
@@ -120,21 +119,20 @@ AppImage + deb。`files` 只收 `out/**` 与 `package.json`,`resources/` 通过 
 ### 6.1 CI 与发版
 
 CI 侧 `.github/workflows/build-windows.yml` 在 `windows-latest` 上跑
-`typecheck + test + self-check + dist:win` 并上传产物;`build-linux.yml` 在 `ubuntu-latest`(xvfb)
-做同样的事。两者都可从 Actions 页手动触发。
+`typecheck + test + self-check + dist:win` 并上传产物,可从 Actions 页手动触发。`build-linux.yml`
+(ubuntu-latest,曾负责 Linux 出包并把 `self-check` 当硬门禁)已随 Linux 出包链路一并删除。
 
 **出包入口是 GitHub 上的 Release,不是 tag**:
 
 1. 先把 `package.json` 的 `version` 改好并提交(例如 `0.2.0`)。
 2. 在 GitHub 上创建 Release,选/建 tag **`v0.2.0`**,然后发布它。
-3. `release: published` 触发两个 workflow:先跑 `node scripts/check-release-tag.mjs` 校验 tag,再跑
-   `npm run release:win` / `release:linux`(`--publish always`),把 exe / AppImage / deb 连同
-   `latest*.yml` 与 blockmap 作为资产挂到**这个** Release 上。两个平台并行上传,文件名互不重叠,
-   electron-builder 只覆盖同名资产,所以先传完的不会被后传的清掉。
+3. `release: published` 触发 workflow:先跑 `node scripts/check-release-tag.mjs` 校验 tag,再跑
+   `npm run release:win`(`--publish always`),把 exe 连同 `latest.yml` 与 blockmap 作为资产挂到
+   **这个** Release 上。
 4. 失败时重跑同一个 run 即可:资产会覆盖上传(`EP_GH_IGNORE_TIME=true` 绕开 electron-builder 对
    已发布 Release 的 2 小时上传限制)。
 
-两个前提:
+三个前提:
 
 - **tag 必须是 `v<package.json version>`**。electron-builder 按 `v` + version 找 Release
   (`vPrefixedTagName` 默认 true),tag 与 version 不一致时它会把安装包挂到另一个 Release(甚至新建
@@ -143,8 +141,8 @@ CI 侧 `.github/workflows/build-windows.yml` 在 `windows-latest` 上跑
   不想发布时,用 Actions 页的 `workflow_dispatch`,或走 PR。草稿(draft)Release 也不会触发——
   点 Publish 才触发。
 - **workflow 定义取自 `main`,代码取自 tag**(GitHub 对 `release` 这类事件的规则)。所以 tag 指向
-  的那个 commit 里必须有 `release:win` / `release:linux` 脚本,否则这一步会以
-  `Missing script: release:win` 失败。打 tag 前先确认这些提交已经在 tag 里。
+  的那个 commit 里必须有 `release:win` 脚本,否则这一步会以 `Missing script: release:win` 失败。
+  打 tag 前先确认这些提交已经在 tag 里。
 
 ## 7. 数据与状态(开发时)
 

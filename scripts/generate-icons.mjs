@@ -2,10 +2,11 @@
 /**
  * Generates the icon assets used by electron-builder and the tray.
  *
- * Why a generator instead of committed binaries: the app needs a PNG set for
- * Linux, a 512px source for Windows (electron-builder converts it to ICO) and a
- * DPI-aware pair for the tray, and none of the machines this project is built on
- * is guaranteed to have ImageMagick or any other image tooling.
+ * Why a generator instead of committed binaries: the app needs a 512px source for
+ * Windows (electron-builder converts it to ICO), the size-named PNGs the self-check
+ * decodes to prove the icon assets are real images, and a DPI-aware pair for the
+ * tray — and none of the machines this project is built on is guaranteed to have
+ * ImageMagick or any other image tooling.
  *
  * Everything here is dependency-free — a minimal PNG encoder on top of node:zlib —
  * and every asset it writes is a PNG, which is the one format that can be verified
