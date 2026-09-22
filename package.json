@@ -17,9 +17,9 @@
     "i18n:sort": "node scripts/sort-i18n-keys.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "self-check": "npm run build && electron . --self-check",
-    "pack": "npm run build && electron-builder --dir",
-    "dist:win": "npm run build && electron-builder --win nsis",
-    "dist:linux": "npm run build && electron-builder --linux AppImage deb"
+    "pack": "npm run build && electron-builder --dir --publish never",
+    "dist:win": "npm run build && electron-builder --win nsis --publish never",
+    "dist:linux": "npm run build && electron-builder --linux AppImage deb --publish never"
   },
   "dependencies": {
     "i18next": "^26.2.0",
