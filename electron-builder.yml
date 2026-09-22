@@ -16,6 +16,19 @@ asar: true
 asarUnpack:
   - "**/node_modules/sql.js/dist/*.wasm"
 artifactName: ${productName}-${version}-${arch}.${ext}
+# Publishing only ever happens through .github/workflows (on a published GitHub
+# Release), which calls `npm run release:win` / `release:linux` — i.e. `--publish
+# always`. Every other build passes `--publish never`, so this block stays inert
+# locally and in PR/main builds. It exists to pin two defaults:
+#   - releaseType: release — electron-builder defaults to *draft*, and a draft
+#     publisher refuses to upload to a release that is already public ("GitHub
+#     release not created"), which is exactly the release we are building for.
+#   - vPrefixedTagName: true — releases are tagged `v<package.json version>`;
+#     scripts/check-release-tag.mjs enforces that before anything is built.
+publish:
+  - provider: github
+    releaseType: release
+    vPrefixedTagName: true
 win:
   target:
     - target: nsis

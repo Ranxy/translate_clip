@@ -37,8 +37,11 @@
 | `npm run self-check` | 构建后以 `--self-check` 启动,跑一遍端到端自检(见 §4) |
 | `npm run icons` | 重新生成 `resources/` 里的图标(无第三方依赖的生成脚本) |
 | `npm run pack` | `electron-builder --dir`,产出未打包目录,便于检查 asar 布局 |
-| `npm run dist:win` | Windows NSIS 安装包 |
-| `npm run dist:linux` | Linux AppImage + deb |
+| `npm run dist:win` | Windows NSIS 安装包(只出包,不发布) |
+| `npm run dist:linux` | Linux AppImage + deb(只出包,不发布) |
+| `npm run release:win` | Windows NSIS 安装包并**发布到 GitHub Release**(只有 Release 事件下的 CI 会调用) |
+| `npm run release:linux` | Linux AppImage + deb 并发布到该 Release(同上) |
+| `node scripts/check-release-tag.mjs <tag>` | 校验 tag 是 `v<package.json version>`(CI 在出 Release 前先跑;本地可手动跑) |
 
 > **注意**:`electron-vite dev` 默认不带 `-w`,**不会**监听主进程/preload 的改动并重启。改了
 > `src/main/**` 或 `src/preload/**` 需要手动重启 dev;渲染进程有 HMR。
@@ -99,16 +102,49 @@ src/
 AppImage + deb。`files` 只收 `out/**` 与 `package.json`,`resources/` 通过 `extraResources` 随包
 发出。
 
-两个容易踩的点,改动时请保留:
+四个容易踩的点,改动时请保留:
 
 1. **`resources/` 是逐目录映射的**(`resources/icons → icons`),不是 `from: resources, to:
    resources`。后者会多套一层,打包后代码按 `<resources>/icons/…` 找图会落空,托盘图标静默变白。
 2. **`sql.js` 的 `.wasm` 在 `asarUnpack` 白名单里**——它是运行时加载的,不进白名单数据库在安装版
    里打不开。
+3. **`--publish never` 不能删**。electron-builder 在 CI 里检测到 CI 环境后会"隐式发布"
+   (`Implicit publishing triggered by CI detection`),然后去建 GitHub publisher 并要求
+   `GH_TOKEN`,构建直接在打包完成后报错退出(本仓库只在出 Release 时发布)。显式写
+   `--publish never` 是官方推荐的关法,v27 起隐式发布也会彻底移除。
+4. **`publish.releaseType: release` 不能改成 `draft`**。electron-builder 的默认发布形态是草稿,
+   而草稿形态的 publisher 会**拒绝**往一个已经公开的 Release 上传资产(日志里只有一行
+   `GitHub release not created`,构建仍然成功)。本仓库的流程是"你先公开 Release,CI 再挂资产",
+   所以这里必须是 `release`。
+
+### 6.1 CI 与发版
 
 CI 侧 `.github/workflows/build-windows.yml` 在 `windows-latest` 上跑
 `typecheck + test + self-check + dist:win` 并上传产物;`build-linux.yml` 在 `ubuntu-latest`(xvfb)
 做同样的事。两者都可从 Actions 页手动触发。
+
+**出包入口是 GitHub 上的 Release,不是 tag**:
+
+1. 先把 `package.json` 的 `version` 改好并提交(例如 `0.2.0`)。
+2. 在 GitHub 上创建 Release,选/建 tag **`v0.2.0`**,然后发布它。
+3. `release: published` 触发两个 workflow:先跑 `node scripts/check-release-tag.mjs` 校验 tag,再跑
+   `npm run release:win` / `release:linux`(`--publish always`),把 exe / AppImage / deb 连同
+   `latest*.yml` 与 blockmap 作为资产挂到**这个** Release 上。两个平台并行上传,文件名互不重叠,
+   electron-builder 只覆盖同名资产,所以先传完的不会被后传的清掉。
+4. 失败时重跑同一个 run 即可:资产会覆盖上传(`EP_GH_IGNORE_TIME=true` 绕开 electron-builder 对
+   已发布 Release 的 2 小时上传限制)。
+
+两个前提:
+
+- **tag 必须是 `v<package.json version>`**。electron-builder 按 `v` + version 找 Release
+  (`vPrefixedTagName` 默认 true),tag 与 version 不一致时它会把安装包挂到另一个 Release(甚至新建
+  一个),所以 `scripts/check-release-tag.mjs` 会在构建前直接失败。
+- **单纯的 `git push --tags` 不再触发构建**(workflow 的 push 触发只保留 `main`)。只想验证出包、
+  不想发布时,用 Actions 页的 `workflow_dispatch`,或走 PR。草稿(draft)Release 也不会触发——
+  点 Publish 才触发。
+- **workflow 定义取自 `main`,代码取自 tag**(GitHub 对 `release` 这类事件的规则)。所以 tag 指向
+  的那个 commit 里必须有 `release:win` / `release:linux` 脚本,否则这一步会以
+  `Missing script: release:win` 失败。打 tag 前先确认这些提交已经在 tag 里。
 
 ## 7. 数据与状态(开发时)
 

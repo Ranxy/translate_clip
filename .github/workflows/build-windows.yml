@@ -2,11 +2,15 @@ name: Build Windows Package
 
 on:
   workflow_dispatch:
+  # Publishing a GitHub Release is the release pipeline: it builds the tagged
+  # commit and attaches the installer to that same release. A plain `git push
+  # --tags` does not trigger anything — releasing is what ships.
+  release:
+    types:
+      - published
   push:
     branches:
       - main
-    tags:
-      - 'v*'
   pull_request:
     branches:
       - main
@@ -14,6 +18,10 @@ on:
 jobs:
   windows-dist:
     runs-on: windows-latest
+    permissions:
+      # Needed by the release path only (attach assets to the release). The token
+      # is exposed to that single step, never to the build/test steps.
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -47,8 +55,25 @@ jobs:
         continue-on-error: true
         run: npm run self-check
 
+      - name: Verify the release tag matches the packaged version
+        # electron-builder uploads to `v` + package.json version, so a release
+        # tagged differently would publish the installer to the wrong release.
+        # Runs before the build; the tag is read from GITHUB_REF_NAME.
+        if: github.event_name == 'release'
+        run: node scripts/check-release-tag.mjs
+
       - name: Build the installer
+        if: github.event_name != 'release'
         run: npm run dist:win
+
+      - name: Build the installer and attach it to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Re-running a failed release job must overwrite the assets even when
+          # the release is older than electron-builder's 2 hour upload window.
+          EP_GH_IGNORE_TIME: 'true'
+        run: npm run release:win
 
       - name: Upload the installer
         uses: actions/upload-artifact@v4
