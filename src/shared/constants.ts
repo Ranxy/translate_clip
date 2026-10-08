@@ -1,5 +1,5 @@
 import type { SupportedLocale } from './locales'
-import type { AppConfig, LlmProviderId } from './types'
+import type { AppConfig, LlmProviderId, LlmThinkingControl } from './types'
 
 /* ── Language catalogue ────────────────────────────────────────────── */
 
@@ -80,6 +80,7 @@ export const LLM_PROVIDER_DEFINITIONS: ReadonlyArray<{
   description: string
   defaultApiBaseUrl: string
   requiresApiKey: boolean
+  thinkingControl: LlmThinkingControl
   docsUrl: string | null
 }> = [
   {
@@ -88,6 +89,7 @@ export const LLM_PROVIDER_DEFINITIONS: ReadonlyArray<{
     description: 'OpenAI GPT models.',
     defaultApiBaseUrl: 'https://api.openai.com/v1',
     requiresApiKey: true,
+    thinkingControl: 'openai-effort',
     docsUrl: 'https://platform.openai.com/api-keys'
   },
   {
@@ -96,6 +98,7 @@ export const LLM_PROVIDER_DEFINITIONS: ReadonlyArray<{
     description: 'DeepSeek chat and reasoner models.',
     defaultApiBaseUrl: 'https://api.deepseek.com',
     requiresApiKey: true,
+    thinkingControl: 'deepseek-thinking',
     docsUrl: 'https://platform.deepseek.com/api_keys'
   },
   {
@@ -104,6 +107,7 @@ export const LLM_PROVIDER_DEFINITIONS: ReadonlyArray<{
     description: 'Hundreds of models from many vendors behind one OpenAI-compatible API.',
     defaultApiBaseUrl: 'https://openrouter.ai/api/v1',
     requiresApiKey: true,
+    thinkingControl: 'openrouter-reasoning',
     docsUrl: 'https://openrouter.ai/settings/keys'
   },
   {
@@ -112,6 +116,7 @@ export const LLM_PROVIDER_DEFINITIONS: ReadonlyArray<{
     description: 'Local models served by Ollama. No API key, nothing leaves this machine.',
     defaultApiBaseUrl: 'http://127.0.0.1:11434/v1',
     requiresApiKey: false,
+    thinkingControl: 'ollama-think',
     docsUrl: 'https://ollama.com/download'
   },
   {
@@ -120,9 +125,15 @@ export const LLM_PROVIDER_DEFINITIONS: ReadonlyArray<{
     description: 'Any other OpenAI-compatible endpoint.',
     defaultApiBaseUrl: '',
     requiresApiKey: true,
+    thinkingControl: 'none',
     docsUrl: null
   }
 ]
+
+/** Resolves which request parameter turns a provider's reasoning off. */
+export function thinkingControlFor(providerId: LlmProviderId): LlmThinkingControl {
+  return LLM_PROVIDER_DEFINITIONS.find((entry) => entry.providerId === providerId)?.thinkingControl ?? 'none'
+}
 
 /* ── Defaults ──────────────────────────────────────────────────────── */
 

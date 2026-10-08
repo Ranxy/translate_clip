@@ -45,6 +45,19 @@ export function isLlmProviderId(value: string): value is LlmProviderId {
   return SUPPORTED_LLM_PROVIDER_IDS.includes(value as LlmProviderId)
 }
 
+/**
+ * Which request parameter turns a provider's reasoning off.
+ *
+ * Providers disagree on the shape, so the catalogue names the mechanism and the
+ * client implements each one; `none` means there is no known switch.
+ */
+export type LlmThinkingControl =
+  | 'openai-effort'
+  | 'deepseek-thinking'
+  | 'openrouter-reasoning'
+  | 'ollama-think'
+  | 'none'
+
 export interface LlmProviderDefinition {
   providerId: LlmProviderId
   label: string
@@ -52,6 +65,8 @@ export interface LlmProviderDefinition {
   defaultApiBaseUrl: string
   /** Ollama runs locally and accepts any bearer token, so the UI hides the key field. */
   requiresApiKey: boolean
+  /** How to ask this provider for a faster, non-reasoning answer. */
+  thinkingControl: LlmThinkingControl
   docsUrl: string | null
 }
 
@@ -68,6 +83,8 @@ export interface LlmProviderProfile {
   modelName: string
   customLabel: string | null
   hasApiKey: boolean
+  /** False asks the provider to answer without reasoning, trading quality for speed. */
+  thinkingEnabled: boolean
   createdAt: string
   updatedAt: string
   isActive: boolean
@@ -87,6 +104,7 @@ export interface SaveLlmProviderProfileInput {
   copyApiKeyFromProfileId?: string
   customLabel?: string
   apiBaseUrl?: string
+  thinkingEnabled?: boolean
 }
 
 export interface FetchLlmProviderModelsInput {

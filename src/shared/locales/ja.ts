@@ -189,6 +189,8 @@ export const ja: LocaleResource = {
       hideKey: '隠す',
       model: 'モデル',
       modelPlaceholder: '例:deepseek-chat',
+      thinking: 'モデルに思考させる',
+      thinkingHint: 'オンにするとモデルが考えてから回答します。品質は上がりますが、遅く高コストになります。オフにすると最も速い回答を要求します。',
       fetchModels: 'モデルを取得',
       fetching: '取得中…',
       filterModels: 'モデルを絞り込む',

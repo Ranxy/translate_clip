@@ -65,7 +65,8 @@ describe('LlmConfigStore', () => {
       providerId: 'deepseek',
       apiBaseUrl: 'https://api.deepseek.com',
       modelName: 'deepseek-chat',
-      apiKey: 'sk-test'
+      apiKey: 'sk-test',
+      thinkingEnabled: true
     })
   })
 
@@ -95,6 +96,22 @@ describe('LlmConfigStore', () => {
     expect(state.profiles[0].apiBaseUrl).toBe('http://127.0.0.1:11434/v1')
     expect(state.profiles[0].hasApiKey).toBe(false)
     expect(store.getResolvedConfig()?.apiKey).toBeNull()
+  })
+
+  it('defaults thinking on and remembers a profile that turns it off', async () => {
+    const first = await store.saveProfile({ providerId: 'openai', modelName: 'gpt-5', apiKey: 'sk-test' })
+    const profileId = first.profiles[0].profileId
+
+    expect(first.profiles[0].thinkingEnabled).toBe(true)
+
+    const off = await store.saveProfile({ profileId, providerId: 'openai', modelName: 'gpt-5', thinkingEnabled: false })
+
+    expect(off.profiles[0].thinkingEnabled).toBe(false)
+    expect(store.getResolvedConfig()?.thinkingEnabled).toBe(false)
+
+    // Omitting the flag on a later edit keeps the stored choice.
+    const still = await store.saveProfile({ profileId, providerId: 'openai', modelName: 'gpt-5-mini' })
+    expect(still.profiles[0].thinkingEnabled).toBe(false)
   })
 
   it('switches the active profile', async () => {

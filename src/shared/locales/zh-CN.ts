@@ -192,6 +192,8 @@ export const zhCN = {
       hideKey: '隐藏',
       model: '模型',
       modelPlaceholder: '例如 deepseek-chat',
+      thinking: '让模型思考',
+      thinkingHint: '开启后模型会先推理再作答：质量更好，但更慢、更贵。关闭则请求最快的作答方式。',
       fetchModels: '拉取模型',
       fetching: '拉取中…',
       filterModels: '筛选模型',

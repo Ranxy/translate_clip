@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS llm_provider_profiles (
   encrypted_api_key TEXT,
   is_active INTEGER NOT NULL DEFAULT 1,
   is_selected INTEGER NOT NULL DEFAULT 0,
+  thinking_enabled INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -49,6 +50,25 @@ CREATE TABLE IF NOT EXISTS translations (
 CREATE INDEX IF NOT EXISTS idx_translations_created_at ON translations (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_translations_hash ON translations (source_hash, target_language);
 `
+
+/**
+ * Creates the schema and brings an older file up to date.
+ *
+ * `CREATE TABLE IF NOT EXISTS` never alters an existing table, so a column added
+ * after a database was first written has to be applied explicitly, or every read
+ * of that column would fail on the old file.
+ */
+function applySchema(database: Database): void {
+  database.exec(SCHEMA)
+
+  const columns = new Set(
+    queryAll<{ name: string }>(database, 'PRAGMA table_info(llm_provider_profiles)').map((row) => row.name)
+  )
+
+  if (!columns.has('thinking_enabled')) {
+    database.run('ALTER TABLE llm_provider_profiles ADD COLUMN thinking_enabled INTEGER NOT NULL DEFAULT 1')
+  }
+}
 
 export type SqlValue = string | number | null | Uint8Array
 
@@ -162,7 +182,7 @@ export function createDatabaseService(options: { filePath: string; log: Logger }
 
       const openFreshDatabase = () => {
         database = new sqlite!.Database()
-        database.exec(SCHEMA)
+        applySchema(database)
       }
 
       if (existing) {
@@ -170,7 +190,7 @@ export function createDatabaseService(options: { filePath: string; log: Logger }
           database = new sqlite.Database(existing)
           // A corrupt file is not detected by the constructor — it surfaces on the
           // first statement, so the schema has to be part of the probe.
-          database.exec(SCHEMA)
+          applySchema(database)
         } catch (error) {
           // Never silently drop data: keep the unreadable file for inspection.
           const backupPath = `${options.filePath}.corrupt-${Date.now()}`

@@ -14,6 +14,8 @@ export interface ResolvedLlmConfig {
   apiBaseUrl: string
   modelName: string
   apiKey: string | null
+  /** Passed straight to the request: off asks the provider for a faster answer. */
+  thinkingEnabled: boolean
 }
 
 interface ProfileRow {
@@ -24,12 +26,13 @@ interface ProfileRow {
   custom_label: string | null
   encrypted_api_key: string | null
   is_selected: number
+  thinking_enabled: number
   created_at: string
   updated_at: string
 }
 
 const PROFILE_COLUMNS =
-  'profile_id, provider_id, api_base_url, model_name, custom_label, encrypted_api_key, is_selected, created_at, updated_at'
+  'profile_id, provider_id, api_base_url, model_name, custom_label, encrypted_api_key, is_selected, thinking_enabled, created_at, updated_at'
 
 /**
  * Provider profiles: what to call, with which model, and the credential to use.
@@ -68,7 +71,8 @@ export class LlmConfigStore {
       providerId: row.provider_id as LlmProviderId,
       apiBaseUrl: row.api_base_url,
       modelName: row.model_name,
-      apiKey: this.credentials.decrypt(row.encrypted_api_key)
+      apiKey: this.credentials.decrypt(row.encrypted_api_key),
+      thinkingEnabled: row.thinking_enabled !== 0
     }
   }
 
@@ -99,6 +103,9 @@ export class LlmConfigStore {
     const shouldAutoSelect = selected === null
     const now = new Date().toISOString()
     const encryptedApiKey = this.resolveApiKey(input, current)
+    // Omitted keeps whatever the profile had (1 for a brand-new one).
+    const thinkingEnabled =
+      input.thinkingEnabled === undefined ? (current?.thinking_enabled ?? 1) : input.thinkingEnabled ? 1 : 0
 
     const profileId = current?.profile_id ?? randomUUID()
     const database = this.database.getDatabase()
@@ -110,7 +117,7 @@ export class LlmConfigStore {
 
     database.run(
       `INSERT INTO llm_provider_profiles (${PROFILE_COLUMNS})
-       VALUES ($profileId, $providerId, $apiBaseUrl, $modelName, $customLabel, $encryptedApiKey, $isSelected, $createdAt, $updatedAt)
+       VALUES ($profileId, $providerId, $apiBaseUrl, $modelName, $customLabel, $encryptedApiKey, $isSelected, $thinkingEnabled, $createdAt, $updatedAt)
        ON CONFLICT(profile_id) DO UPDATE SET
          provider_id = excluded.provider_id,
          api_base_url = excluded.api_base_url,
@@ -118,6 +125,7 @@ export class LlmConfigStore {
          custom_label = excluded.custom_label,
          encrypted_api_key = excluded.encrypted_api_key,
          is_selected = excluded.is_selected,
+         thinking_enabled = excluded.thinking_enabled,
          updated_at = excluded.updated_at`,
       {
         $profileId: profileId,
@@ -128,6 +136,7 @@ export class LlmConfigStore {
           typeof input.customLabel === 'string' ? input.customLabel.trim() || null : (current?.custom_label ?? null),
         $encryptedApiKey: encryptedApiKey,
         $isSelected: isSelected,
+        $thinkingEnabled: thinkingEnabled,
         $createdAt: current?.created_at ?? now,
         $updatedAt: now
       }
@@ -207,6 +216,7 @@ export class LlmConfigStore {
       modelName: row.model_name,
       customLabel: row.custom_label,
       hasApiKey: Boolean(row.encrypted_api_key),
+      thinkingEnabled: row.thinking_enabled !== 0,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       isActive: row.is_selected === 1

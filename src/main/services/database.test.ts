@@ -1,6 +1,9 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+
+import initSqlJs from 'sql.js'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -83,5 +86,21 @@ describe('createDatabaseService', () => {
   it('refuses to hand out a database that was never loaded', () => {
     const service = createDatabaseService({ filePath, log: createFakeLogger() })
     expect(() => service.getDatabase()).toThrow(/not been loaded/u)
+  })
+
+  it('adds the thinking column to a database written before it existed', async () => {
+    const require = createRequire(import.meta.url)
+    const SQL = await initSqlJs({ locateFile: (fileName) => require.resolve(`sql.js/dist/${fileName}`) })
+    const legacy = new SQL.Database()
+    legacy.exec('CREATE TABLE llm_provider_profiles (profile_id TEXT PRIMARY KEY, provider_id TEXT NOT NULL, api_base_url TEXT NOT NULL, model_name TEXT NOT NULL, custom_label TEXT, encrypted_api_key TEXT, is_active INTEGER NOT NULL DEFAULT 1, is_selected INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)')
+    legacy.run(`INSERT INTO llm_provider_profiles (profile_id, provider_id, api_base_url, model_name, is_selected, created_at, updated_at) VALUES ('p', 'openai', 'https://api.openai.com/v1', 'gpt-4o', 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`)
+    await writeFile(filePath, legacy.export())
+    legacy.close()
+
+    const service = createDatabaseService({ filePath, log: createFakeLogger() })
+    await service.load()
+
+    const rows = queryAll<{ thinking_enabled: number }>(service.getDatabase(), 'SELECT thinking_enabled FROM llm_provider_profiles')
+    expect(rows).toEqual([{ thinking_enabled: 1 }])
   })
 })

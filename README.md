@@ -118,6 +118,8 @@ and spends no tokens. Saving the first profile makes it the active one.
 
 Ollama needs no key: it defaults to `http://127.0.0.1:11434/v1`.
 
+Each profile has a **Let the model think** switch. Turning it off asks the provider for the fastest answer instead of a reasoned one — handy when speed matters more than polish.
+
 API keys are encrypted with the operating system's own facility (DPAPI on Windows) and never reach
 the interface — the settings page reads one only when you explicitly reveal it. On a Linux system
 without a keyring, the settings page says so plainly instead of pretending the key is safe.

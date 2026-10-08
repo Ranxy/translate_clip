@@ -383,7 +383,7 @@ function buildUserMessage(text: string): string   // 纯文本,不再 JSON 打�
 interface TranslateRequest {
   text: string
   direction: Direction
-  profile: { providerId: LlmProviderId; apiBaseUrl: string; modelName: string }
+  profile: { providerId: LlmProviderId; apiBaseUrl: string; modelName: string; thinkingEnabled: boolean }
   apiKey: string | null
   prompt: string
   signal: AbortSignal
@@ -398,6 +398,7 @@ interface TranslateResult {
 
 - 端点:`POST {baseUrl 去尾斜杠}/chat/completions`,Header `Authorization: Bearer <key>`(**Ollama 无 key 时不发送该 Header**)。
 - Body:`{ model, temperature: cfg.temperature (默认 0.2), stream: false, messages: [system, user] }`。
+- **思考开关(按 profile)**:profile 关闭思考时按 provider 追加关闭参数——OpenAI 推理模型写 `reasoning_effort`(`gpt-5` → `minimal`,`o` 系列 → `low`;非推理模型不追加)、DeepSeek 写 `thinking:{type:'disabled'}`、OpenRouter 写 `reasoning:{enabled:false}`、Ollama 写 `think:false`、自定义端点无已知开关(不追加)。开启时一律不追加,保持各 provider 默认行为。
 - **响应解析(关键路径,必须宽容)**:
   1. `choices[0].message.content` 兼容 `string` 与 `Array<{type,text}>` 两种形态(部分网关返回数组)。
   2. 去 ```json 围栏 → `JSON.parse`;失败则取首 `{` 到末 `}` 再 parse;再失败则**把整段文本当作译文**(`detectedLanguage: null`)。三层回落,保证任何不听话的模型都能出结果。
@@ -433,6 +434,7 @@ CREATE TABLE IF NOT EXISTS llm_provider_profiles (      -- 与 eve-babel 同构
   profile_id TEXT PRIMARY KEY, provider_id TEXT NOT NULL, api_base_url TEXT NOT NULL,
   model_name TEXT NOT NULL, custom_label TEXT, encrypted_api_key TEXT,
   is_active INTEGER NOT NULL DEFAULT 0, is_selected INTEGER NOT NULL DEFAULT 0,
+  thinking_enabled INTEGER NOT NULL DEFAULT 1,        -- 0 = 关闭思考(更快、可能更差)
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 );
 

@@ -189,6 +189,8 @@ export const ru: LocaleResource = {
       hideKey: 'Скрыть',
       model: 'Модель',
       modelPlaceholder: 'например, deepseek-chat',
+      thinking: 'Разрешить модели думать',
+      thinkingHint: 'Включено — модель рассуждает перед ответом: качественнее, но медленнее и дороже. Выключено — запрашивается самый быстрый ответ.',
       fetchModels: 'Загрузить модели',
       fetching: 'Загрузка…',
       filterModels: 'Фильтр моделей',

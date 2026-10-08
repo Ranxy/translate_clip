@@ -7,7 +7,8 @@ import {
   LlmRequestError,
   normalizeMessageContent,
   parseTranslationContent,
-  requestTranslation
+  requestTranslation,
+  thinkingRequestParams
 } from './llmClient'
 
 const servers: StubServer[] = []
@@ -18,14 +19,19 @@ async function createServer(initial = chatResponse('{"detectedLanguage":"en","tr
   return server
 }
 
-function baseRequest(server: StubServer, patch: Partial<Parameters<typeof requestTranslation>[0]> = {}) {
+function baseRequest(
+  server: StubServer,
+  patch: Partial<Parameters<typeof requestTranslation>[0]> = {}
+): Parameters<typeof requestTranslation>[0] {
   return {
     apiBaseUrl: server.baseUrl,
+    providerId: 'openai',
     modelName: 'test-model',
     apiKey: 'sk-test',
     systemPrompt: 'translate this',
     text: 'Hello world',
     temperature: 0.2,
+    thinkingEnabled: true,
     timeoutMs: 2_000,
     retryCount: 0,
     ...patch
@@ -140,6 +146,13 @@ describe('requestTranslation', () => {
     expect(server.requests[0].headers.authorization).toBeUndefined()
   })
 
+  it('sends the provider thinking switch when the profile asks for it', async () => {
+    const server = await createServer()
+    await requestTranslation(baseRequest(server, { providerId: 'openrouter', thinkingEnabled: false }))
+
+    expect(server.requests[0].body).toMatchObject({ reasoning: { enabled: false } })
+  })
+
   it('retries a rate limit and then succeeds', async () => {
     const server = await createServer({ status: 429, body: { error: { message: 'slow down' } } })
     server.enqueue(chatResponse('{"translatedText":"你好"}'))
@@ -203,6 +216,31 @@ describe('requestTranslation', () => {
   })
 })
 
+describe('thinkingRequestParams', () => {
+  it('sends nothing while thinking is on', () => {
+    expect(thinkingRequestParams('openai', 'gpt-5', true)).toEqual({})
+    expect(thinkingRequestParams('deepseek', 'deepseek-reasoner', true)).toEqual({})
+  })
+
+  it('asks an OpenAI reasoning model for the least effort', () => {
+    expect(thinkingRequestParams('openai', 'gpt-5', false)).toEqual({ reasoning_effort: 'minimal' })
+    expect(thinkingRequestParams('openai', 'o3-mini', false)).toEqual({ reasoning_effort: 'low' })
+  })
+
+  it('leaves a non-reasoning OpenAI model untouched', () => {
+    expect(thinkingRequestParams('openai', 'gpt-4o', false)).toEqual({})
+  })
+
+  it('uses the switch the other providers expose', () => {
+    expect(thinkingRequestParams('deepseek', 'deepseek-chat', false)).toEqual({ thinking: { type: 'disabled' } })
+    expect(thinkingRequestParams('openrouter', 'openai/gpt-5', false)).toEqual({ reasoning: { enabled: false } })
+    expect(thinkingRequestParams('ollama', 'qwen3:8b', false)).toEqual({ think: false })
+  })
+
+  it('has no switch for a custom endpoint', () => {
+    expect(thinkingRequestParams('custom', 'my-model', false)).toEqual({})
+  })
+})
 describe('checkProviderConnection', () => {
   it('accepts a reachable endpoint', async () => {
     const server = await createServer({ status: 200, body: { data: [{ id: 'test-model' }] } })

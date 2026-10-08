@@ -189,6 +189,8 @@ export const en: LocaleResource = {
       hideKey: 'Hide',
       model: 'Model',
       modelPlaceholder: 'e.g. deepseek-chat',
+      thinking: 'Let the model think',
+      thinkingHint: 'On, the model may reason before answering: better quality, but slower and dearer. Off asks for the fastest answer the provider supports.',
       fetchModels: 'Fetch models',
       fetching: 'Fetching…',
       filterModels: 'Filter models',

@@ -1,4 +1,5 @@
-import type { LlmError, LlmErrorCode } from '@shared/types'
+import { thinkingControlFor } from '@shared/constants'
+import type { LlmError, LlmErrorCode, LlmProviderId } from '@shared/types'
 
 const RETRYABLE_CODES: ReadonlySet<LlmErrorCode> = new Set(['rate-limit', 'timeout', 'server', 'network'])
 const RETRY_BACKOFF_MS = [600, 1_800]
@@ -24,11 +25,14 @@ export class LlmRequestError extends Error {
 
 export interface TranslationRequestOptions {
   apiBaseUrl: string
+  providerId: LlmProviderId
   modelName: string
   apiKey: string | null
   systemPrompt: string
   text: string
   temperature: number
+  /** False asks the provider to answer without reasoning, trading quality for speed. */
+  thinkingEnabled: boolean
   timeoutMs: number
   retryCount: number
   signal?: AbortSignal
@@ -91,6 +95,58 @@ function readTranslatedText(payload: Record<string, unknown>): { translatedText:
     translatedText: candidate.trim(),
     detectedLanguage: typeof payload.detectedLanguage === 'string' ? payload.detectedLanguage.trim() || null : null
   }
+}
+
+/**
+ * Extra request fields that turn a provider's reasoning off.
+ *
+ * Providers disagree on how to ask for a non-reasoning answer, so the shape comes
+ * from the provider catalogue. Nothing is sent while thinking is on, which keeps
+ * every provider on its own default and the request identical to before this
+ * setting existed.
+ */
+export function thinkingRequestParams(
+  providerId: LlmProviderId,
+  modelName: string,
+  thinkingEnabled: boolean
+): Record<string, unknown> {
+  if (thinkingEnabled) {
+    return {}
+  }
+
+  switch (thinkingControlFor(providerId)) {
+    case 'openai-effort':
+      return openAiEffort(modelName)
+    case 'deepseek-thinking':
+      return { thinking: { type: 'disabled' } }
+    case 'openrouter-reasoning':
+      return { reasoning: { enabled: false } }
+    case 'ollama-think':
+      return { think: false }
+    default:
+      return {}
+  }
+}
+
+/**
+ * The lowest reasoning effort an OpenAI model accepts.
+ *
+ * `reasoning_effort` exists only on reasoning models; a plain chat model rejects
+ * it, so anything unrecognised gets no field. GPT-5 also accepts `minimal`, while
+ * the o-series starts at `low`.
+ */
+function openAiEffort(modelName: string): Record<string, unknown> {
+  const id = modelName.trim().toLowerCase()
+
+  if (/^gpt-5/u.test(id)) {
+    return { reasoning_effort: 'minimal' }
+  }
+
+  if (/^o[1-9]/u.test(id)) {
+    return { reasoning_effort: 'low' }
+  }
+
+  return {}
 }
 
 /**
@@ -201,6 +257,7 @@ async function attemptTranslation(options: TranslationRequestOptions, attempt: n
       body: JSON.stringify({
         model: options.modelName,
         temperature: options.temperature,
+        ...thinkingRequestParams(options.providerId, options.modelName, options.thinkingEnabled),
         stream: false,
         messages: [
           { role: 'system', content: options.systemPrompt },

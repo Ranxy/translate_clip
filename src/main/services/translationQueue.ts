@@ -149,8 +149,10 @@ export class TranslationQueue {
     try {
       result = await requestTranslation({
         apiBaseUrl: config.apiBaseUrl,
+        providerId: config.providerId,
         modelName: config.modelName,
         apiKey: config.apiKey,
+        thinkingEnabled: config.thinkingEnabled,
         systemPrompt: this.options.buildSystemPrompt(job.direction, job.text),
         text: job.text,
         temperature: appConfig.temperature,

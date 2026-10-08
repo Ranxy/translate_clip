@@ -18,6 +18,7 @@ import { Card, CardHeader, Divider } from '../ui/Card'
 import { Field } from '../ui/Field'
 import { IconExternal, IconRefresh } from '../ui/Icon'
 import { TextInput } from '../ui/Input'
+import { Switch } from '../ui/Switch'
 
 interface FormState {
   profileId: string | null
@@ -25,6 +26,7 @@ interface FormState {
   modelName: string
   customLabel: string
   apiKey: string
+  thinkingEnabled: boolean
   revealStoredKey: boolean
 }
 
@@ -37,6 +39,7 @@ function createFormState(profile: LlmProviderProfile | null, providerId: LlmProv
     modelName: profile?.modelName ?? '',
     customLabel: profile?.customLabel ?? '',
     apiKey: '',
+    thinkingEnabled: profile?.thinkingEnabled ?? true,
     revealStoredKey: false
   }
 }
@@ -159,6 +162,7 @@ export function ProvidersPage() {
       modelName: form.modelName.trim(),
       apiBaseUrl: form.apiBaseUrl.trim(),
       customLabel: form.customLabel.trim() || undefined,
+      thinkingEnabled: form.thinkingEnabled,
       // An untouched field keeps the stored key; an emptied one clears it.
       apiKey: form.apiKey.trim().length > 0 ? form.apiKey.trim() : hasStoredKey && !form.revealStoredKey ? undefined : form.apiKey
     }
@@ -396,6 +400,16 @@ export function ProvidersPage() {
             onChange={(event) => setForm((current) => ({ ...current, customLabel: event.target.value }))}
           />
         </Field>
+
+        {definition?.thinkingControl !== 'none' ? (
+          <Field label={t('settings.providers.thinking')} hint={t('settings.providers.thinkingHint')}>
+            <Switch
+              label={t('settings.providers.thinking')}
+              checked={form.thinkingEnabled}
+              onChange={(checked) => setForm((current) => ({ ...current, thinkingEnabled: checked }))}
+            />
+          </Field>
+        ) : null}
 
         <Divider />
 

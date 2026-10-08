@@ -77,7 +77,8 @@ describe('TranslationQueue', () => {
       providerId: 'custom',
       apiBaseUrl: server.baseUrl,
       modelName: 'test-model',
-      apiKey: 'sk-test'
+      apiKey: 'sk-test',
+      thinkingEnabled: true
     }
   }
 
@@ -136,7 +137,8 @@ describe('TranslationQueue', () => {
       providerId: 'custom',
       apiBaseUrl: server.baseUrl,
       modelName: 'test-model',
-      apiKey: null
+      apiKey: null,
+      thinkingEnabled: true
     }
     config = { ...DEFAULT_CONFIG, autoReplaceClipboard: true, retryCount: 0 }
 
@@ -155,7 +157,8 @@ describe('TranslationQueue', () => {
       providerId: 'custom',
       apiBaseUrl: server.baseUrl,
       modelName: 'test-model',
-      apiKey: null
+      apiKey: null,
+      thinkingEnabled: true
     }
 
     const queue = createQueue()
@@ -254,7 +257,8 @@ describe('TranslationQueue', () => {
       providerId: 'custom',
       apiBaseUrl: server.baseUrl,
       modelName: 'test-model',
-      apiKey: null
+      apiKey: null,
+      thinkingEnabled: true
     }
 
     const queue = createQueue()
