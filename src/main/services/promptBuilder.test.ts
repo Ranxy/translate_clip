@@ -17,6 +17,7 @@ const glossary: GlossaryEntry[] = [
 function promptConfig(patch: Partial<PromptConfig> = {}): PromptConfig {
   return {
     translationPrompt: DEFAULT_TRANSLATION_PROMPT,
+    translationStyle: '',
     glossaryEnabled: true,
     glossaryMaxTerms: 30,
     glossary,
@@ -112,5 +113,18 @@ describe('buildSystemPrompt', () => {
     const prompt = buildSystemPrompt(promptConfig(), directionTo, 'Nothing relevant here')
 
     expect(prompt).not.toContain('## Glossary')
+  })
+
+  it('injects the translation style when set', () => {
+    const prompt = buildSystemPrompt(promptConfig({ translationStyle: 'casual and concise' }), directionTo, 'Hello')
+
+    expect(prompt).toContain('## Translation style')
+    expect(prompt).toContain('casual and concise')
+  })
+
+  it('omits the style segment when unset', () => {
+    const prompt = buildSystemPrompt(promptConfig(), directionTo, 'Hello')
+
+    expect(prompt).not.toContain('## Translation style')
   })
 })

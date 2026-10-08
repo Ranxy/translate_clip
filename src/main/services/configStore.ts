@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { APP_LIMITS, DEFAULT_CONFIG, isSupportedLanguage } from '@shared/constants'
+import { APP_LIMITS, DEFAULT_CONFIG, TRANSLATION_STYLE_MAX_LENGTH, isSupportedLanguage } from '@shared/constants'
 import { SUPPORTED_LOCALES } from '@shared/locales'
 import type {
   AppConfig,
@@ -81,6 +81,15 @@ function sanitizeString(value: unknown, fallback: string, maxLength: number): st
   }
 
   return trimmed.slice(0, maxLength)
+}
+
+/** Like {@link sanitizeString}, but an empty value is meaningful and kept. */
+function sanitizeOptionalString(value: unknown, maxLength: number): string {
+  if (typeof value !== 'string') {
+    return ''
+  }
+
+  return value.trim().slice(0, maxLength)
 }
 
 function sanitizeIgnorePatterns(value: unknown, warn: Warn): string[] {
@@ -246,6 +255,7 @@ export function sanitizeConfig(input: unknown, warn: Warn = () => undefined): Ap
     targetLanguage: sanitizeLanguage(source.targetLanguage, DEFAULT_CONFIG.targetLanguage, warn, 'targetLanguage'),
     fallbackLanguage: sanitizeLanguage(source.fallbackLanguage, DEFAULT_CONFIG.fallbackLanguage, warn, 'fallbackLanguage'),
     translationPrompt: sanitizeString(source.translationPrompt, DEFAULT_CONFIG.translationPrompt, 8_000),
+    translationStyle: sanitizeOptionalString(source.translationStyle, TRANSLATION_STYLE_MAX_LENGTH),
     temperature: clampNumber(source.temperature, DEFAULT_CONFIG.temperature, APP_LIMITS.temperature, false, warn, 'temperature'),
     requestTimeoutMs: clampNumber(source.requestTimeoutMs, DEFAULT_CONFIG.requestTimeoutMs, APP_LIMITS.requestTimeoutMs, true, warn, 'requestTimeoutMs'),
     retryCount: clampNumber(source.retryCount, DEFAULT_CONFIG.retryCount, APP_LIMITS.retryCount, true, warn, 'retryCount'),

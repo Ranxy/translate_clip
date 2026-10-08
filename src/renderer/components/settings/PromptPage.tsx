@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { APP_LIMITS, DEFAULT_TRANSLATION_PROMPT } from '@shared/constants'
+import { APP_LIMITS, DEFAULT_TRANSLATION_PROMPT, TRANSLATION_STYLE_MAX_LENGTH } from '@shared/constants'
 
 import { useAppState, useAppStore } from '../../store/appStore'
 import { Button } from '../ui/Button'
 import { Card, CardHeader, Divider } from '../ui/Card'
 import { Field } from '../ui/Field'
-import { CodeBlock, TextArea } from '../ui/Input'
+import { CodeBlock, TextArea, TextInput } from '../ui/Input'
 import { NumberInput } from '../ui/NumberInput'
 
 const SAMPLE_TEXT = 'The quick brown fox jumps over the lazy dog.'
@@ -25,18 +25,24 @@ export function PromptPage() {
   const { config } = useAppState().bootstrap
 
   const [template, setTemplate] = useState(config.translationPrompt)
+  const [style, setStyle] = useState(config.translationStyle)
   const [sample, setSample] = useState(SAMPLE_TEXT)
   const [preview, setPreview] = useState('')
   const [busy, setBusy] = useState(false)
 
   const dirty = template.trim() !== config.translationPrompt.trim()
+  const styleDirty = style.trim() !== config.translationStyle.trim()
 
   useEffect(() => {
     let cancelled = false
 
     void (async () => {
       try {
-        const rendered = await window.translateClip.previewPrompt({ text: sample, translationPrompt: template })
+        const rendered = await window.translateClip.previewPrompt({
+          text: sample,
+          translationPrompt: template,
+          translationStyle: style
+        })
         if (!cancelled) {
           setPreview(rendered)
         }
@@ -53,6 +59,7 @@ export function PromptPage() {
   }, [
     sample,
     template,
+    style,
     config.targetLanguage,
     config.fallbackLanguage,
     config.directionMode,
@@ -66,6 +73,17 @@ export function PromptPage() {
     try {
       await store.updateConfig({ translationPrompt: template.trim() || DEFAULT_TRANSLATION_PROMPT })
       setTemplate(template.trim() || DEFAULT_TRANSLATION_PROMPT)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const saveStyle = async () => {
+    setBusy(true)
+
+    try {
+      await store.updateConfig({ translationStyle: style.trim() })
+      setStyle(style.trim())
     } finally {
       setBusy(false)
     }
@@ -104,6 +122,29 @@ export function PromptPage() {
         </ul>
 
         <p className="mt-3 text-[11.5px] leading-relaxed text-faint">{t('settings.prompt.responseContract')}</p>
+      </Card>
+
+      <Card>
+        <CardHeader title={t('settings.prompt.style')} description={t('settings.prompt.styleDescription')} />
+
+        <TextInput
+          value={style}
+          maxLength={TRANSLATION_STYLE_MAX_LENGTH}
+          placeholder={t('settings.prompt.stylePlaceholder')}
+          aria-label={t('settings.prompt.style')}
+          onChange={(event) => setStyle(event.target.value)}
+        />
+
+        <div className="mt-2 flex items-center gap-2">
+          <Button variant="primary" size="sm" disabled={busy || !styleDirty} onClick={() => void saveStyle()}>
+            {t('common.save')}
+          </Button>
+          <Button size="sm" disabled={style.length === 0} onClick={() => setStyle('')}>
+            {t('settings.prompt.reset')}
+          </Button>
+          <span className="flex-1" />
+          {styleDirty ? <span className="text-[11.5px] text-warn">{t('common.save')}?</span> : null}
+        </div>
       </Card>
 
       <Card>

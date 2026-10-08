@@ -374,6 +374,7 @@ function buildUserMessage(text: string): string   // 纯文本,不再 JSON 打�
   > Respond with JSON only: {"detectedLanguage":"<BCP-47>","translatedText":"<translation>"}
 
 - **术语表注入**:只注入与 `targetLanguage` 相关且源文实际命中的条目(子串匹配,`toLowerCase` 归一),按源词长度降序、上限 `glossaryMaxTerms`(默认 30),格式 `` `source` → target ``;明确"必须使用给定译法"。
+- **翻译风格注入**:设置页可填写自由文本风格(如"口语化""正式书面""面向开发者"),非空时作为独立段落 `## Translation style` 追加到 system prompt,留空则不追加;上限 500 字符。
 - **不用 JSON 打包源文**:单条翻译把源文直接作为 user message,减少 token 与转义风险。
 
 ### 5.5 llmClient
@@ -508,6 +509,7 @@ interface AppConfig {
   targetLanguage: string                         // 默认 zh-CN
   fallbackLanguage: string                       // 默认 en-US
   translationPrompt: string                      // 默认见 §5.4
+  translationStyle: string                       // 默认 ''(空=不追加风格指令);上限 500
   temperature: number                            // 默认 0.2
   requestTimeoutMs: number                       // 默认 30000
   retryCount: number                             // 默认 2
@@ -651,7 +653,7 @@ interface AppConfig {
 1. **通用** — UI 语言、主题、浮层透明度(滑块:拖动即时预览、松手落盘)、浮层字号、不透明模式、开机自启、关闭到托盘、历史上限、数据目录/日志目录入口。
 2. **剪贴板** — 监听开关(暂停/恢复)、轮询间隔(滑块 + 说明延迟/CPU 取舍)、最小/最大长度、忽略正则(可增删 + 即时校验)、单 token 跳过、缓存开关 + TTL、LLM 调试日志。
 3. **Providers** — 复用 eve-babel 的交互骨架:左侧 provider 列表(OpenAI / DeepSeek / OpenRouter / Ollama / 自定义),右侧 profile 表单(API Key 掩码显示 + 显示/隐藏切换、Base URL、模型下拉 + 搜索、`拉取模型`、`测试连接`、设为当前)。Ollama 分支不显示 Key 字段,默认 `http://localhost:11434/v1`。
-4. **提示词** — 模板 textarea + 可用变量说明 + 右侧实时预览(用一段示例文本渲染最终 system prompt)。
+4. **提示词** — 模板 textarea + 翻译风格输入框 + 可用变量说明 + 右侧实时预览(用一段示例文本渲染最终 system prompt)。
 5. **术语表** — 条目 CRUD(多语言 variants 逗号分隔 + notes)、搜索、JSON 导入/导出。
 6. **快捷键** — 录制式输入 + 占用冲突提示 + 清除(不注册)+ 恢复默认(= 全部清空,因默认不注册)。
 7. **关于** — 版本、开源许可、诊断信息(平台/Electron 版本/数据目录一键复制)、**重新运行初始向导**。
@@ -833,7 +835,7 @@ nsis:
 
 | 层 | 手段 | 覆盖 |
 | --- | --- | --- |
-| 单元(vitest) | 纯函数 / 依赖注入 | 162 个用例:`clipboardFilter`(各 reason 分支)、`languageDetector`(中/英/日/韩/俄/混合/空)、`promptBuilder`(变量替换 + 术语注入上限)、响应解析(正常 JSON / 围栏 / 前后噪声 / 非 JSON 回落 / 数组 content)、`configStore.sanitize`(越界夹取)、`historyRepository`(内存 sql.js:insert→complete→list→prune→cache 命中)、`translationQueue`(latest-wins abort、重试、不重试 auth、自动替换写回) |
+| 单元(vitest) | 纯函数 / 依赖注入 | 162 个用例:`clipboardFilter`(各 reason 分支)、`languageDetector`(中/英/日/韩/俄/混合/空)、`promptBuilder`(变量替换 + 风格注入 + 术语注入上限)、响应解析(正常 JSON / 围栏 / 前后噪声 / 非 JSON 回落 / 数组 content)、`configStore.sanitize`(越界夹取)、`historyRepository`(内存 sql.js:insert→complete→list→prune→cache 命中)、`translationQueue`(latest-wins abort、重试、不重试 auth、自动替换写回) |
 | 集成(mock fetch) | `llmClient` + 队列 + 仓储 | 401/429/500/超时/中断路径 → 状态与历史落库正确 |
 | 手工(Windows 本机,dev) | `npm run dev` | 浮层视觉/交互/折叠(按内容自适应)/穿透/暂停/清空/自动替换、**首启引导四步(含用全新 userData 复现首启)**、设置页各表单、dev 注入剪贴板的端到端链路、真实剪贴板监听(前台/后台/多应用)、置顶层级、托盘、快捷键、重启后配置与窗口位置恢复 |
 | 手工(Windows 安装版) | `npm run dist:win` | NSIS 安装/卸载、开机自启、托盘图标、单实例 |

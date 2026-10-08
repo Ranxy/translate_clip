@@ -219,6 +219,9 @@ export const zhCN = {
     prompt: {
       description: '提示词决定模型如何翻译。清空会回到默认模板。',
       template: '系统提示词',
+      style: '翻译风格',
+      styleDescription: '描述你想要的语气或风格，例如“口语化”“正式书面”“面向开发者”。设置后会作为一段独立的指令追加到提示词里；留空则不添加。',
+      stylePlaceholder: '例如：口语化、简洁；面向非技术读者',
       variables: '可用变量',
       variableTarget: '{{targetLanguage}} — 目标语言',
       variableSource: '{{sourceLanguage}} — 识别出的源语言（识别不出时为 auto-detected）',

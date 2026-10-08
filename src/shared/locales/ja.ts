@@ -216,6 +216,9 @@ export const ja: LocaleResource = {
     prompt: {
       description: 'プロンプトはモデルの翻訳のしかたを決めます。空にすると既定のテンプレートに戻ります。',
       template: 'システムプロンプト',
+      style: '翻訳のスタイル',
+      styleDescription: '希望する口調やスタイルを自由に記述します（例：「口語的」「フォーマルな文体」「開発者向け」）。設定すると、独立した指示としてプロンプトに追加されます。空欄なら何も追加しません。',
+      stylePlaceholder: '例：口語的で簡潔に。非技術者向け',
       variables: '使用できる変数',
       variableTarget: '{{targetLanguage}} — 翻訳先の言語',
       variableSource: '{{sourceLanguage}} — 判定された原文の言語（不明なときは自動判定）',

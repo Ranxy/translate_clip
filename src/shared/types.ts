@@ -188,6 +188,8 @@ export interface PromptPreviewInput {
   text: string
   /** Overrides the saved template so the preview can follow unsaved edits. */
   translationPrompt?: string
+  /** Overrides the saved style so the preview can follow unsaved edits. */
+  translationStyle?: string
 }
 
 export interface HistoryQuery {
@@ -283,6 +285,8 @@ export interface AppConfig {
   targetLanguage: string
   fallbackLanguage: string
   translationPrompt: string
+  /** Free-form tone of voice injected into the system prompt; empty adds no style instruction. */
+  translationStyle: string
   temperature: number
   requestTimeoutMs: number
   retryCount: number

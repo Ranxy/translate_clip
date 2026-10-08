@@ -30,8 +30,9 @@ You press Ctrl+C in some app   →   ┌─────────────�
   Off by default.
 - **Your own provider.** OpenAI, DeepSeek, OpenRouter, Ollama running on your machine, or any
   OpenAI-compatible endpoint.
-- **History, glossary and prompt are yours to shape** — searchable history, forced terminology, an
   editable prompt template with a live preview.
+- **History, glossary, prompt and style are yours to shape** — searchable history, forced terminology,
+  an editable prompt template with a live preview, and a free-form translation style.
 - **No shortcut required.** Nothing is bound to a global key unless you record one; every action is
   reachable from the overlay and the tray menu.
 
@@ -127,7 +128,8 @@ without a keyring, the settings page says so plainly instead of pretending the k
 as you drag it) and text size, launch at login, close to tray, history limit, and buttons that open
 the data and log folders. **Clipboard** — watching, poll interval, length limits, ignore
 rules, single-token skipping, the reuse cache, auto-replace, request logging. **Providers** — as
-above. **Prompt** — the system prompt template, its variables, and a live preview. **Glossary** —
+above. **Prompt** — the system prompt template, its variables, a free-form translation style, and a
+live preview. **Glossary** —
 forced translations, with JSON import and export. **Shortcuts** — the recorder. **About** — version,
 platform diagnostics, and *Run the first-run wizard again*.
 

@@ -216,6 +216,9 @@ export const en: LocaleResource = {
     prompt: {
       description: 'The prompt decides how the model translates. Clearing it restores the default template.',
       template: 'System prompt',
+      style: 'Translation style',
+      styleDescription: 'Describe the tone or style you want, such as "casual", "formal", or "for a developer audience". When set, it is appended to the prompt as its own instruction; leave it empty to add nothing.',
+      stylePlaceholder: 'e.g. casual and concise; aimed at non-technical readers',
       variables: 'Available variables',
       variableTarget: '{{targetLanguage}} — the target language',
       variableSource: '{{sourceLanguage}} — the detected source language (auto-detected when unknown)',

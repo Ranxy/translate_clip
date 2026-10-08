@@ -772,7 +772,11 @@ class TranslateClipApp {
         })
 
         return buildSystemPrompt(
-          { ...this.config, translationPrompt: input.translationPrompt?.trim() || DEFAULT_CONFIG.translationPrompt },
+          {
+            ...this.config,
+            translationPrompt: input.translationPrompt?.trim() || DEFAULT_CONFIG.translationPrompt,
+            translationStyle: input.translationStyle?.trim() ?? this.config.translationStyle
+          },
           direction,
           text
         )

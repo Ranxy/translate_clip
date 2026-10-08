@@ -133,6 +133,9 @@ export const DEFAULT_TRANSLATION_PROMPT = [
   'Respond with JSON only, exactly: {"detectedLanguage":"<BCP-47 tag of the source text>","translatedText":"<translation>"}'
 ].join('\n')
 
+/** Longest translation-style description accepted from the settings page. */
+export const TRANSLATION_STYLE_MAX_LENGTH = 500
+
 export const APP_LIMITS = {
   pollIntervalMs: { min: 200, max: 2000, step: 50 },
   minSourceChars: { min: 1, max: 50, step: 1 },
@@ -175,6 +178,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   targetLanguage: DEFAULT_TARGET_LANGUAGE,
   fallbackLanguage: DEFAULT_FALLBACK_LANGUAGE,
   translationPrompt: DEFAULT_TRANSLATION_PROMPT,
+  translationStyle: '',
   temperature: 0.2,
   requestTimeoutMs: 30_000,
   retryCount: 2,

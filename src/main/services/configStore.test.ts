@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { APP_LIMITS, DEFAULT_CONFIG } from '@shared/constants'
+import { APP_LIMITS, DEFAULT_CONFIG, TRANSLATION_STYLE_MAX_LENGTH } from '@shared/constants'
 
 import { ConfigStore, sanitizeConfig } from './configStore'
 
@@ -46,6 +46,14 @@ describe('sanitizeConfig', () => {
 
     expect(config.targetLanguage).toBe('pl-PL')
     expect(config.fallbackLanguage).toBe(DEFAULT_CONFIG.fallbackLanguage)
+  })
+
+  it('trims the translation style, caps its length and tolerates an empty value', () => {
+    const long = 'a'.repeat(TRANSLATION_STYLE_MAX_LENGTH + 50)
+
+    expect(sanitizeConfig({ translationStyle: `  ${long}  ` }).translationStyle).toBe('a'.repeat(TRANSLATION_STYLE_MAX_LENGTH))
+    expect(sanitizeConfig({ translationStyle: '   ' }).translationStyle).toBe('')
+    expect(sanitizeConfig({ translationStyle: 42 }).translationStyle).toBe('')
   })
 
   it('drops unusable ignore patterns while keeping valid ones', () => {

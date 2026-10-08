@@ -8,6 +8,7 @@ export interface GlossaryMatch {
 
 export interface PromptConfig {
   translationPrompt: string
+  translationStyle: string
   glossaryEnabled: boolean
   glossaryMaxTerms: number
   glossary: GlossaryEntry[]
@@ -117,6 +118,16 @@ export function buildGlossarySegment(matches: GlossaryMatch[]): string {
 }
 
 /**
+ * Renders the user's tone-of-voice preference as its own instruction.
+ *
+ * Kept separate from the template so it survives a rewrite of the system prompt, and
+ * placed next to the glossary so a free-form style never has to restate the contract.
+ */
+export function buildStyleSegment(style: string): string {
+  return ['## Translation style', `Write the translation in this style: ${style}`].join('\n')
+}
+
+/**
  * Assembles the system prompt for one translation.
  *
  * The instruction to answer with JSON lives here rather than in the user's
@@ -124,6 +135,11 @@ export function buildGlossarySegment(matches: GlossaryMatch[]): string {
  */
 export function buildSystemPrompt(config: PromptConfig, direction: TranslationDirection, sourceText: string): string {
   const segments = [renderPromptTemplate(config.translationPrompt, direction)]
+
+  const style = config.translationStyle?.trim()
+  if (style) {
+    segments.push(buildStyleSegment(style))
+  }
 
   if (config.glossaryEnabled) {
     const matches = matchGlossaryEntries(config.glossary, sourceText, direction.targetLanguage, config.glossaryMaxTerms)
